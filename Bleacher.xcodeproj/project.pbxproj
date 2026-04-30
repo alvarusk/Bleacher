@@ -261,7 +261,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.takoworks.Bleacher;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alvarusk.Bleacher;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -288,7 +288,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.takoworks.Bleacher;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alvarusk.Bleacher;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -323,4 +323,3 @@
 	};
 	rootObject = A10000000000000000000001 /* Project object */;
 }
-
