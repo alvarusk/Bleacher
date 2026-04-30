@@ -8,7 +8,9 @@
 - Ajustar grosor del borrador.
 - Deshacer y rehacer por trazo completo.
 - Eliminar página actual.
-- Exportar PDF resultante.
+- Navegar entre páginas con botones visibles.
+- Exportar PDF desde un botón visible.
+- Copiar y pegar zonas con una primera versión de Lazo.
 
 ## 0.2 - Experiencia de edición
 
@@ -17,7 +19,7 @@
 - Confirmar antes de borrar una página.
 - Mostrar estado de exportación.
 - Afinar comportamiento de zoom, scroll y borrado.
-- Añadir una herramienta de lazo para delimitar una zona, copiarla y pegarla en otro punto del PDF.
+- Afinar la herramienta Lazo: selección libre real, previsualización de pegado y orden de capas.
 
 ## 0.3 - Seguridad documental
 

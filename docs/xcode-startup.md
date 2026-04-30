@@ -38,6 +38,8 @@ xcodebuild \
 - Comprobar que `Deshacer` elimina el trazo completo.
 - Comprobar que `Rehacer` lo restaura.
 - Cambiar el grosor y dibujar otro trazo.
+- Pasar de página con `Anterior` y `Siguiente`.
+- Delimitar una zona con `Lazo`, tocar `Copiar selección`, cambiar a `Pegar` y tocar el PDF para colocarla.
 - Borrar una página.
 - Exportar el PDF.
 - Abrir el PDF exportado y comprobar que las zonas aparecen borradas.

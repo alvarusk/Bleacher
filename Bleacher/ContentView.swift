@@ -48,7 +48,7 @@ struct ContentView: View {
                         Button(role: .destructive) {
                             model.deleteSelectedPage()
                         } label: {
-                            Label("Borrar pagina", systemImage: "trash")
+                            Label("Borrar página", systemImage: "trash")
                         }
                         .disabled(!model.canDeleteSelectedPage)
 
@@ -62,7 +62,7 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 if model.pdfDocument != nil {
-                    eraserControls
+                    editorControls
                 }
             }
             .fileImporter(
@@ -108,22 +108,87 @@ struct ContentView: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
-    private var eraserControls: some View {
-        HStack(spacing: 14) {
+    private var editorControls: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                Button {
+                    model.goToPreviousPage()
+                } label: {
+                    Label("Anterior", systemImage: "chevron.left")
+                }
+                .disabled(!model.canGoToPreviousPage)
+
+                Text(model.pageStatus)
+                    .font(.callout.weight(.semibold))
+                    .monospacedDigit()
+                    .frame(minWidth: 120)
+
+                Button {
+                    model.goToNextPage()
+                } label: {
+                    Label("Siguiente", systemImage: "chevron.right")
+                }
+                .disabled(!model.canGoToNextPage)
+
+                Spacer(minLength: 12)
+
+                Button {
+                    exportPDF()
+                } label: {
+                    Label("Exportar PDF", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            HStack(spacing: 14) {
+                Picker("Herramienta", selection: $model.selectedTool) {
+                    ForEach(EditingTool.allCases) { tool in
+                        Text(tool.title).tag(tool)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+
+                toolSpecificControls
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
+    }
+
+    @ViewBuilder
+    private var toolSpecificControls: some View {
+        switch model.selectedTool {
+        case .eraser:
             Label("Grosor", systemImage: "eraser")
                 .labelStyle(.iconOnly)
                 .font(.title3)
 
             Slider(value: $model.eraserWidth, in: 8...96, step: 1)
-                .frame(maxWidth: 420)
+                .frame(maxWidth: 360)
 
             Text("\(Int(model.eraserWidth))")
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)
+
+        case .lasso:
+            Button {
+                model.copyCurrentSelection()
+            } label: {
+                Label("Copiar selección", systemImage: "doc.on.doc")
+            }
+            .disabled(!model.canCopySelection)
+
+            Spacer(minLength: 0)
+
+        case .paste:
+            Label("Toca el PDF para pegar", systemImage: "hand.tap")
+                .font(.callout)
+                .foregroundStyle(model.canPaste ? .primary : .secondary)
+
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(.regularMaterial)
     }
 
     private var errorPresented: Binding<Bool> {
@@ -160,4 +225,3 @@ struct ContentView: View {
 #Preview {
     ContentView()
 }
-
