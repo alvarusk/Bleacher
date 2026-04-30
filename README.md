@@ -23,3 +23,8 @@ Bleacher es una app nativa para iPad pensada para borrar zonas de PDFs con una e
 
 Bleacher no se integra directamente con iCloud, Google Drive ni OneDrive. Usa la app Archivos de iPadOS, asi cualquier proveedor compatible aparece automaticamente en el selector del sistema.
 
+## Documentacion
+
+- [Arquitectura inicial](docs/architecture.md)
+- [Arranque en Xcode](docs/xcode-startup.md)
+- [Roadmap](docs/roadmap.md)
