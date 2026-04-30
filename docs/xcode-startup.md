@@ -1,6 +1,6 @@
 # Arranque en Xcode
 
-Cuando el Mac este disponible:
+Cuando el Mac esté disponible:
 
 1. Clonar el repo:
 
@@ -14,7 +14,7 @@ Cuando el Mac este disponible:
 3. Abrir `Signing & Capabilities`.
 4. Elegir tu `Team`.
 5. Compilar primero en un iPad Simulator.
-6. Despues probar en iPad fisico.
+6. Después probar en iPad físico.
 
 ## Build por terminal
 
@@ -38,7 +38,6 @@ xcodebuild \
 - Comprobar que `Deshacer` elimina el trazo completo.
 - Comprobar que `Rehacer` lo restaura.
 - Cambiar el grosor y dibujar otro trazo.
-- Borrar una pagina.
+- Borrar una página.
 - Exportar el PDF.
 - Abrir el PDF exportado y comprobar que las zonas aparecen borradas.
-

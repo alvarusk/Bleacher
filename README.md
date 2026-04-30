@@ -13,17 +13,17 @@ Bleacher es una app nativa para iPad pensada para borrar zonas de PDFs con una e
 ## Funciones base
 
 - Abrir PDFs con el selector de documentos de iPadOS.
-- Borrar areas con dedo o Apple Pencil.
+- Borrar áreas con dedo o Apple Pencil.
 - Ajustar el grosor del borrador.
-- Eliminar la pagina actual.
+- Eliminar la página actual.
 - Deshacer y rehacer por trazo completo.
-- Exportar un PDF nuevo con las areas borradas.
+- Exportar un PDF nuevo con las áreas borradas.
 
 ## Estrategia de archivos
 
-Bleacher no se integra directamente con iCloud, Google Drive ni OneDrive. Usa la app Archivos de iPadOS, asi cualquier proveedor compatible aparece automaticamente en el selector del sistema.
+Bleacher no se integra directamente con iCloud, Google Drive ni OneDrive. Usa la app Archivos de iPadOS, así cualquier proveedor compatible aparece automáticamente en el selector del sistema.
 
-## Documentacion
+## Documentación
 
 - [Arquitectura inicial](docs/architecture.md)
 - [Arranque en Xcode](docs/xcode-startup.md)

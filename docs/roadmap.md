@@ -7,27 +7,27 @@
 - Borrar zonas con dedo o Apple Pencil.
 - Ajustar grosor del borrador.
 - Deshacer y rehacer por trazo completo.
-- Eliminar pagina actual.
+- Eliminar página actual.
 - Exportar PDF resultante.
 
-## 0.2 - Experiencia de edicion
+## 0.2 - Experiencia de edición
 
-- Mejorar seleccion de pagina actual.
-- Anadir miniaturas o navegador de paginas.
-- Confirmar antes de borrar una pagina.
-- Mostrar estado de exportacion.
+- Mejorar selección de página actual.
+- Añadir miniaturas o navegador de páginas.
+- Confirmar antes de borrar una página.
+- Mostrar estado de exportación.
 - Afinar comportamiento de zoom, scroll y borrado.
+- Añadir una herramienta de lazo para delimitar una zona, copiarla y pegarla en otro punto del PDF.
 
 ## 0.3 - Seguridad documental
 
-- Decidir si Bleacher debe ser solo whiteout visual o redaccion real.
-- Si hace falta redaccion real, rasterizar paginas editadas o eliminar contenido subyacente.
-- Anadir advertencias claras al exportar si el PDF no esta redactado de forma irreversible.
+- Decidir si Bleacher debe ser solo whiteout visual o redacción real.
+- Si hace falta redacción real, rasterizar páginas editadas o eliminar contenido subyacente.
+- Añadir advertencias claras al exportar si el PDF no está redactado de forma irreversible.
 
 ## 0.4 - Pulido iPad
 
 - Atajos de teclado.
 - Mejor soporte para Apple Pencil.
-- Icono de app.
-- Tests basicos del modelo de historial.
-
+- Icono de la app.
+- Pruebas básicas del modelo de historial.
