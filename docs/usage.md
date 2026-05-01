@@ -6,7 +6,11 @@ Toca `Abrir PDF` y selecciona el archivo desde la app Archivos de iPadOS.
 
 ## Pasar de página
 
-Usa los botones `Anterior` y `Siguiente` de la barra inferior. Entre ambos botones se muestra la página actual.
+Usa los botones `Anterior` y `Siguiente` de la barra inferior.
+
+También puedes tocar el campo de número de página, escribir el número al que quieres ir y confirmar la entrada.
+
+El visor muestra una barra lateral de scroll. En modo `Mano`, puedes arrastrar esa barra para moverte más rápido por la vista.
 
 ## Ajustar zoom
 
@@ -18,6 +22,8 @@ El menú `Ajustar` permite volver al ajuste base:
 - `Ajustar alto`: encaja la página verticalmente.
 
 También puedes pellizcar con dos dedos sobre el PDF. Si estás ampliado, arrastra con dos dedos para desplazar la vista.
+
+Si prefieres mover la vista con un solo dedo, selecciona `Mano` y arrastra sobre el PDF.
 
 ## Borrar zonas
 

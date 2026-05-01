@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var isExporting = false
     @State private var exportDocument = PDFExportDocument(data: Data())
     @State private var errorMessage: String?
+    @State private var pageInput = ""
+    @FocusState private var pageInputFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -86,6 +88,19 @@ struct ContentView: View {
             } message: {
                 Text(errorMessage ?? "")
             }
+            .onChange(of: model.currentPageIndex) { _, _ in
+                syncPageInput()
+            }
+            .onChange(of: model.pageCount) { _, _ in
+                syncPageInput()
+            }
+            .onChange(of: pageInputFocused) { _, isFocused in
+                if isFocused {
+                    pageInput = "\(model.currentPageIndex + 1)"
+                } else {
+                    commitPageInput()
+                }
+            }
         }
     }
 
@@ -117,10 +132,32 @@ struct ContentView: View {
                 }
                 .disabled(!model.canGoToPreviousPage)
 
-                Text(model.pageStatus)
-                    .font(.callout.weight(.semibold))
-                    .monospacedDigit()
-                    .frame(minWidth: 120)
+                HStack(spacing: 6) {
+                    TextField("Página", text: $pageInput)
+                        .keyboardType(.numberPad)
+                        .submitLabel(.go)
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.center)
+                        .monospacedDigit()
+                        .frame(width: 64)
+                        .focused($pageInputFocused)
+                        .onSubmit(commitPageInput)
+
+                    Button {
+                        pageInputFocused = false
+                        commitPageInput()
+                    } label: {
+                        Label("Ir a página", systemImage: "arrow.right.to.line")
+                            .labelStyle(.iconOnly)
+                    }
+
+                    Text("de \(model.pageCount)")
+                        .font(.callout.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 158)
+                .onAppear(perform: syncPageInput)
 
                 Button {
                     model.goToNextPage()
@@ -142,11 +179,11 @@ struct ContentView: View {
             HStack(spacing: 14) {
                 Picker("Herramienta", selection: $model.selectedTool) {
                     ForEach(EditingTool.allCases) { tool in
-                        Text(tool.title).tag(tool)
+                        Label(tool.title, systemImage: tool.systemImage).tag(tool)
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 420)
 
                 toolSpecificControls
             }
@@ -195,6 +232,13 @@ struct ContentView: View {
     @ViewBuilder
     private var toolSpecificControls: some View {
         switch model.selectedTool {
+        case .pan:
+            Label("Arrastra con un dedo para mover la vista", systemImage: "hand.raised")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
         case .eraser:
             Label("Grosor", systemImage: "eraser")
                 .labelStyle(.iconOnly)
@@ -239,6 +283,7 @@ struct ContentView: View {
             guard let url = urls.first else { return }
             do {
                 try model.open(url: url)
+                syncPageInput()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -254,6 +299,32 @@ struct ContentView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func syncPageInput() {
+        guard !pageInputFocused else { return }
+
+        pageInput = model.pageCount > 0 ? "\(model.currentPageIndex + 1)" : ""
+    }
+
+    private func commitPageInput() {
+        guard model.pageCount > 0 else {
+            pageInput = ""
+            return
+        }
+
+        let trimmedInput = pageInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let requestedPage = Int(trimmedInput) else {
+            syncPageInputAfterCommit()
+            return
+        }
+
+        model.goToPage(at: requestedPage - 1)
+        syncPageInputAfterCommit()
+    }
+
+    private func syncPageInputAfterCommit() {
+        pageInput = "\(model.currentPageIndex + 1)"
     }
 }
 

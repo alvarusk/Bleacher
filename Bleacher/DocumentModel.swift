@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 
 enum EditingTool: String, CaseIterable, Identifiable {
+    case pan
     case eraser
     case lasso
     case paste
@@ -12,12 +13,27 @@ enum EditingTool: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .pan:
+            return "Mano"
         case .eraser:
             return "Borrador"
         case .lasso:
             return "Lazo"
         case .paste:
             return "Pegar"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pan:
+            return "hand.raised"
+        case .eraser:
+            return "eraser"
+        case .lasso:
+            return "lasso"
+        case .paste:
+            return "doc.on.doc"
         }
     }
 }

@@ -45,6 +45,12 @@ La UI ofrece:
 - ajuste vertical por alto
 - pellizco con dos dedos
 - desplazamiento con dos dedos cuando la página está ampliada
+- herramienta `Mano` para desplazar la vista con un dedo
+- barra lateral propia para indicar y arrastrar la posición vertical
+
+## Navegación
+
+La barra inferior mantiene botones `Anterior` y `Siguiente`, pero el número de página actual también es editable. Al escribir un número, el modelo limita el salto al rango válido del documento.
 
 ## Exportación
 

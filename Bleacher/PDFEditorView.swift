@@ -87,6 +87,7 @@ final class PDFEditorHostView: UIView {
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
         pdfView.backgroundColor = .systemGroupedBackground
+        configureScrollIndicators()
 
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         overlayView.backgroundColor = .clear
@@ -142,6 +143,7 @@ final class PDFEditorHostView: UIView {
 
         observedZoomScale = model.zoomScale
         observedZoomFitMode = model.zoomFitMode
+        configureScrollIndicators()
     }
 
     private func fitScale(for mode: ZoomFitMode) -> CGFloat {
@@ -168,6 +170,15 @@ final class PDFEditorHostView: UIView {
     private func syncCurrentPage() {
         model?.select(page: pdfView.currentPage)
     }
+
+    private func configureScrollIndicators() {
+        guard let scrollView = pdfView.firstSubview(of: UIScrollView.self) else { return }
+
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.showsHorizontalScrollIndicator = true
+        scrollView.indicatorStyle = .black
+        scrollView.flashScrollIndicators()
+    }
 }
 
 final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
@@ -178,6 +189,8 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
     private var lassoDraft: LassoDraft?
     private var pasteDraft: PasteDraft?
     private var moveDraft: MoveDraft?
+    private var panDraft: PanDraft?
+    private var scrollBarDraft: ScrollBarDraft?
     private var pinchStartZoomScale: CGFloat = 1
     private var pinchRecognizer: UIPinchGestureRecognizer?
     private var twoFingerPanRecognizer: UIPanGestureRecognizer?
@@ -196,15 +209,26 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         guard
             touches.count == 1,
             let touch = touches.first,
-            let model,
-            let touchInfo = touchInfo(for: touch)
+            let model
         else {
             return
         }
 
+        if model.selectedTool == .pan {
+            if !beginScrollBarDrag(touch: touch) {
+                beginPan(touch: touch)
+            }
+            return
+        }
+
+        guard let touchInfo = touchInfo(for: touch) else { return }
+
         model.select(page: touchInfo.page)
 
         switch model.selectedTool {
+        case .pan:
+            break
+
         case .eraser:
             let widthOnPage = max(1, model.eraserWidth / max(touchInfo.pdfView.scaleFactor, 0.01))
             strokeDraft = StrokeDraft(
@@ -251,6 +275,10 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
             updatePasteDraft(touch: touch)
         } else if moveDraft != nil {
             updateMoveDraft(touch: touch)
+        } else if panDraft != nil {
+            updatePan(touch: touch)
+        } else if scrollBarDraft != nil {
+            updateScrollBarDrag(touch: touch)
         }
     }
 
@@ -264,6 +292,10 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
                 updatePasteDraft(touch: touch)
             } else if moveDraft != nil {
                 updateMoveDraft(touch: touch)
+            } else if panDraft != nil {
+                updatePan(touch: touch)
+            } else if scrollBarDraft != nil {
+                updateScrollBarDrag(touch: touch)
             }
         }
 
@@ -271,6 +303,8 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         finishLasso(cancelled: false)
         finishPaste(cancelled: false)
         finishMove(cancelled: false)
+        finishPan(cancelled: false)
+        finishScrollBarDrag(cancelled: false)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -278,6 +312,8 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         finishLasso(cancelled: true)
         finishPaste(cancelled: true)
         finishMove(cancelled: true)
+        finishPan(cancelled: true)
+        finishScrollBarDrag(cancelled: true)
     }
 
     override func draw(_ rect: CGRect) {
@@ -332,6 +368,7 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
             drawPaste(pasteDraft.paste, page: pasteDraft.page, pdfView: pdfView, context: context, alpha: 0.55)
         }
 
+        drawScrollBar(in: context)
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -383,20 +420,25 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         }
 
         let translation = recognizer.translation(in: self)
-        let minX = -scrollView.adjustedContentInset.left
-        let minY = -scrollView.adjustedContentInset.top
-        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right)
-        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
         var nextOffset = CGPoint(
             x: scrollView.contentOffset.x - translation.x,
             y: scrollView.contentOffset.y - translation.y
         )
-        nextOffset.x = min(max(nextOffset.x, minX), maxX)
-        nextOffset.y = min(max(nextOffset.y, minY), maxY)
+        clampContentOffset(&nextOffset, in: scrollView)
 
         scrollView.setContentOffset(nextOffset, animated: false)
         recognizer.setTranslation(.zero, in: self)
         setNeedsDisplay()
+    }
+
+    private func clampContentOffset(_ offset: inout CGPoint, in scrollView: UIScrollView) {
+        let minX = -scrollView.adjustedContentInset.left
+        let minY = -scrollView.adjustedContentInset.top
+        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right)
+        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
+
+        offset.x = min(max(offset.x, minX), maxX)
+        offset.y = min(max(offset.y, minY), maxY)
     }
 
     private func cancelDrafts() {
@@ -404,10 +446,101 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         lassoDraft = nil
         pasteDraft = nil
         moveDraft = nil
+        panDraft = nil
+        scrollBarDraft = nil
     }
 
     private func pdfScrollView() -> UIScrollView? {
-        pdfView?.subviews.compactMap { $0 as? UIScrollView }.first
+        pdfView?.firstSubview(of: UIScrollView.self)
+    }
+
+    private func beginPan(touch: UITouch) {
+        guard let scrollView = pdfScrollView() else { return }
+
+        panDraft = PanDraft(
+            startLocation: touch.location(in: self),
+            startContentOffset: scrollView.contentOffset
+        )
+        scrollView.flashScrollIndicators()
+    }
+
+    private func updatePan(touch: UITouch) {
+        guard
+            let panDraft,
+            let scrollView = pdfScrollView()
+        else {
+            return
+        }
+
+        let location = touch.location(in: self)
+        var nextOffset = CGPoint(
+            x: panDraft.startContentOffset.x + panDraft.startLocation.x - location.x,
+            y: panDraft.startContentOffset.y + panDraft.startLocation.y - location.y
+        )
+        clampContentOffset(&nextOffset, in: scrollView)
+        scrollView.setContentOffset(nextOffset, animated: false)
+        setNeedsDisplay()
+    }
+
+    private func finishPan(cancelled: Bool) {
+        panDraft = nil
+        if !cancelled {
+            pdfScrollView()?.flashScrollIndicators()
+        }
+    }
+
+    private func beginScrollBarDrag(touch: UITouch) -> Bool {
+        guard
+            let scrollView = pdfScrollView(),
+            let metrics = scrollBarMetrics(for: scrollView)
+        else {
+            return false
+        }
+
+        let location = touch.location(in: self)
+        guard metrics.hitRect.contains(location) else { return false }
+
+        var nextOffset = scrollView.contentOffset
+        if !metrics.thumbRect.insetBy(dx: -10, dy: -8).contains(location) {
+            let rawProgress = (location.y - metrics.trackRect.minY - metrics.thumbRect.height / 2) / metrics.thumbTravel
+            let progress = min(max(rawProgress, 0), 1)
+            nextOffset.y = metrics.minOffsetY + progress * metrics.offsetTravel
+            clampContentOffset(&nextOffset, in: scrollView)
+            scrollView.setContentOffset(nextOffset, animated: false)
+        }
+
+        scrollBarDraft = ScrollBarDraft(
+            startLocationY: location.y,
+            startContentOffsetY: scrollView.contentOffset.y
+        )
+        scrollView.flashScrollIndicators()
+        setNeedsDisplay()
+        return true
+    }
+
+    private func updateScrollBarDrag(touch: UITouch) {
+        guard
+            let scrollBarDraft,
+            let scrollView = pdfScrollView(),
+            let metrics = scrollBarMetrics(for: scrollView)
+        else {
+            return
+        }
+
+        let deltaY = touch.location(in: self).y - scrollBarDraft.startLocationY
+        var nextOffset = scrollView.contentOffset
+        nextOffset.y = scrollBarDraft.startContentOffsetY + deltaY / metrics.thumbTravel * metrics.offsetTravel
+        clampContentOffset(&nextOffset, in: scrollView)
+        scrollView.setContentOffset(nextOffset, animated: false)
+        setNeedsDisplay()
+    }
+
+    private func finishScrollBarDrag(cancelled: Bool) {
+        scrollBarDraft = nil
+        if !cancelled {
+            pdfScrollView()?.flashScrollIndicators()
+        }
+        setNeedsDisplay()
     }
 
     private func touchInfo(for touch: UITouch) -> TouchInfo? {
@@ -658,6 +791,70 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         context.restoreGState()
     }
 
+    private func drawScrollBar(in context: CGContext) {
+        guard
+            let scrollView = pdfScrollView(),
+            let metrics = scrollBarMetrics(for: scrollView)
+        else {
+            return
+        }
+
+        context.saveGState()
+
+        let trackPath = UIBezierPath(roundedRect: metrics.trackRect, cornerRadius: metrics.trackRect.width / 2)
+        context.setFillColor(UIColor.secondaryLabel.withAlphaComponent(0.18).cgColor)
+        context.addPath(trackPath.cgPath)
+        context.fillPath()
+
+        let thumbPath = UIBezierPath(roundedRect: metrics.thumbRect, cornerRadius: metrics.thumbRect.width / 2)
+        let thumbAlpha: CGFloat = scrollBarDraft == nil ? 0.34 : 0.55
+        context.setFillColor(UIColor.label.withAlphaComponent(thumbAlpha).cgColor)
+        context.addPath(thumbPath.cgPath)
+        context.fillPath()
+
+        context.restoreGState()
+    }
+
+    private func scrollBarMetrics(for scrollView: UIScrollView) -> ScrollBarMetrics? {
+        let minOffsetY = -scrollView.adjustedContentInset.top
+        let maxOffsetY = max(
+            minOffsetY,
+            scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        )
+        let offsetTravel = maxOffsetY - minOffsetY
+        guard offsetTravel > 1, bounds.height > 80 else { return nil }
+
+        let trackInset: CGFloat = 14
+        let trackRect = CGRect(
+            x: bounds.maxX - 12,
+            y: bounds.minY + trackInset,
+            width: 4,
+            height: bounds.height - trackInset * 2
+        )
+        guard trackRect.height > 44 else { return nil }
+
+        let visibleRatio = min(1, scrollView.bounds.height / max(scrollView.contentSize.height, 1))
+        let thumbHeight = min(trackRect.height, max(44, trackRect.height * visibleRatio))
+        let thumbTravel = max(1, trackRect.height - thumbHeight)
+        let progress = min(max((scrollView.contentOffset.y - minOffsetY) / offsetTravel, 0), 1)
+        let thumbRect = CGRect(
+            x: trackRect.minX,
+            y: trackRect.minY + thumbTravel * progress,
+            width: trackRect.width,
+            height: thumbHeight
+        )
+        let hitRect = trackRect.insetBy(dx: -20, dy: 0)
+
+        return ScrollBarMetrics(
+            minOffsetY: minOffsetY,
+            offsetTravel: offsetTravel,
+            thumbTravel: thumbTravel,
+            trackRect: trackRect,
+            thumbRect: thumbRect,
+            hitRect: hitRect
+        )
+    }
+
     private func convert(points: [CGPoint], page: PDFPage, pdfView: PDFView) -> [CGPoint] {
         points.map { pointOnPage -> CGPoint in
             let pointInPDFView = pdfView.convert(pointOnPage, from: page)
@@ -696,6 +893,41 @@ private struct MoveDraft {
     let clip: PastedClip
     var currentOrigin: CGPoint
     let touchOffset: CGPoint
+}
+
+private struct PanDraft {
+    let startLocation: CGPoint
+    let startContentOffset: CGPoint
+}
+
+private struct ScrollBarDraft {
+    let startLocationY: CGFloat
+    let startContentOffsetY: CGFloat
+}
+
+private struct ScrollBarMetrics {
+    let minOffsetY: CGFloat
+    let offsetTravel: CGFloat
+    let thumbTravel: CGFloat
+    let trackRect: CGRect
+    let thumbRect: CGRect
+    let hitRect: CGRect
+}
+
+private extension UIView {
+    func firstSubview<T: UIView>(of type: T.Type) -> T? {
+        if let view = self as? T {
+            return view
+        }
+
+        for subview in subviews {
+            if let match = subview.firstSubview(of: type) {
+                return match
+            }
+        }
+
+        return nil
+    }
 }
 
 private extension CGPoint {

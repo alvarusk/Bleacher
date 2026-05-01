@@ -8,8 +8,9 @@
 - Ajustar grosor del borrador.
 - Deshacer y rehacer por trazo completo.
 - Eliminar página actual.
-- Navegar entre páginas con botones visibles.
+- Navegar entre páginas con botones visibles y salto por número de página.
 - Ajustar zoom con control deslizante, pellizco y ajuste por ancho o alto.
+- Mover la vista con herramienta `Mano` y barra lateral de scroll.
 - Exportar PDF desde un botón visible.
 - Copiar, pegar, mover y borrar zonas pegadas con una primera versión de Lazo.
 
