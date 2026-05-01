@@ -15,7 +15,6 @@ struct ContentView: View {
                     emptyState
                 } else {
                     PDFEditorView(model: model)
-                        .ignoresSafeArea(edges: .bottom)
                 }
             }
             .navigationTitle(model.displayTitle)
@@ -151,10 +150,36 @@ struct ContentView: View {
 
                 toolSpecificControls
             }
+
+            HStack(spacing: 14) {
+                Label("Zoom", systemImage: "magnifyingglass")
+                    .labelStyle(.iconOnly)
+                    .font(.title3)
+
+                Slider(value: zoomBinding, in: model.minZoomScale...model.maxZoomScale, step: 0.05)
+                    .frame(maxWidth: 420)
+
+                Text("\(Int(model.zoomScale * 100))%")
+                    .monospacedDigit()
+                    .frame(width: 52, alignment: .trailing)
+
+                Button {
+                    model.resetZoom()
+                } label: {
+                    Label("Ajustar", systemImage: "arrow.up.left.and.down.right")
+                }
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(.regularMaterial)
+    }
+
+    private var zoomBinding: Binding<CGFloat> {
+        Binding(
+            get: { model.zoomScale },
+            set: { model.setZoomScale($0) }
+        )
     }
 
     @ViewBuilder
@@ -183,7 +208,7 @@ struct ContentView: View {
             Spacer(minLength: 0)
 
         case .paste:
-            Label("Toca el PDF para pegar", systemImage: "hand.tap")
+            Label("Toca y arrastra para colocar", systemImage: "hand.tap")
                 .font(.callout)
                 .foregroundStyle(model.canPaste ? .primary : .secondary)
 

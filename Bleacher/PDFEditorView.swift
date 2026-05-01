@@ -20,6 +20,7 @@ final class PDFEditorHostView: UIView {
     private weak var model: DocumentModel?
     private var observedDocumentRevision: Int?
     private var observedNavigationRevision: Int?
+    private var observedZoomScale: CGFloat?
     private var pageChangeObserver: NSObjectProtocol?
 
     override init(frame: CGRect) {
@@ -40,6 +41,15 @@ final class PDFEditorHostView: UIView {
         }
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        if let model {
+            applyZoom(model: model, force: false)
+            overlayView.setNeedsDisplay()
+        }
+    }
+
     func configure(model: DocumentModel) {
         self.model = model
         overlayView.model = model
@@ -50,11 +60,16 @@ final class PDFEditorHostView: UIView {
             pdfView.autoScales = true
             observedDocumentRevision = model.documentRevision
             observedNavigationRevision = nil
+            observedZoomScale = nil
         }
 
         if observedNavigationRevision != model.navigationRevision {
             goToCurrentPage(model: model)
             observedNavigationRevision = model.navigationRevision
+        }
+
+        if observedZoomScale == nil || abs((observedZoomScale ?? 0) - model.zoomScale) > 0.0001 {
+            applyZoom(model: model, force: true)
         }
 
         overlayView.setNeedsDisplay()
@@ -108,17 +123,38 @@ final class PDFEditorHostView: UIView {
         model.select(page: page)
     }
 
+    private func applyZoom(model: DocumentModel, force: Bool) {
+        guard pdfView.document != nil else { return }
+
+        let fitScale = max(pdfView.scaleFactorForSizeToFit, 0.01)
+        pdfView.minScaleFactor = fitScale * model.minZoomScale
+        pdfView.maxScaleFactor = fitScale * model.maxZoomScale
+
+        let targetScale = fitScale * model.zoomScale
+        if force || abs(pdfView.scaleFactor - targetScale) > 0.001 {
+            pdfView.autoScales = false
+            pdfView.scaleFactor = targetScale
+        }
+
+        observedZoomScale = model.zoomScale
+    }
+
     private func syncCurrentPage() {
         model?.select(page: pdfView.currentPage)
     }
 }
 
-final class BleachOverlayView: UIView {
+final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
     weak var pdfView: PDFView?
     weak var model: DocumentModel?
 
     private var strokeDraft: StrokeDraft?
     private var lassoDraft: LassoDraft?
+    private var pasteDraft: PasteDraft?
+    private var moveDraft: MoveDraft?
+    private var pinchStartZoomScale: CGFloat = 1
+    private var pinchRecognizer: UIPinchGestureRecognizer?
+    private var twoFingerPanRecognizer: UIPanGestureRecognizer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -132,6 +168,7 @@ final class BleachOverlayView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard
+            touches.count == 1,
             let touch = touches.first,
             let model,
             let touchInfo = touchInfo(for: touch)
@@ -159,38 +196,62 @@ final class BleachOverlayView: UIView {
             )
 
         case .paste:
-            model.pasteCopiedClip(at: touchInfo.pointOnPage, pageID: touchInfo.pageID)
+            if let pastedClip = model.pastedClip(at: touchInfo.pointOnPage, pageID: touchInfo.pageID) {
+                moveDraft = MoveDraft(
+                    page: touchInfo.page,
+                    clip: pastedClip,
+                    currentOrigin: pastedClip.origin,
+                    touchOffset: CGPoint(
+                        x: touchInfo.pointOnPage.x - pastedClip.origin.x,
+                        y: touchInfo.pointOnPage.y - pastedClip.origin.y
+                    )
+                )
+            } else if let preview = model.pastePreview(at: touchInfo.pointOnPage, pageID: touchInfo.pageID) {
+                pasteDraft = PasteDraft(page: touchInfo.page, paste: preview)
+            }
         }
 
         setNeedsDisplay()
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
+        guard touches.count == 1, let touch = touches.first else { return }
 
         if strokeDraft != nil {
             appendStroke(touch: touch)
         } else if lassoDraft != nil {
             appendLasso(touch: touch)
+        } else if pasteDraft != nil {
+            updatePasteDraft(touch: touch)
+        } else if moveDraft != nil {
+            updateMoveDraft(touch: touch)
         }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touch = touches.first {
+        if touches.count == 1, let touch = touches.first {
             if strokeDraft != nil {
                 appendStroke(touch: touch)
             } else if lassoDraft != nil {
                 appendLasso(touch: touch)
+            } else if pasteDraft != nil {
+                updatePasteDraft(touch: touch)
+            } else if moveDraft != nil {
+                updateMoveDraft(touch: touch)
             }
         }
 
         finishStroke(cancelled: false)
         finishLasso(cancelled: false)
+        finishPaste(cancelled: false)
+        finishMove(cancelled: false)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         finishStroke(cancelled: true)
         finishLasso(cancelled: true)
+        finishPaste(cancelled: true)
+        finishMove(cancelled: true)
     }
 
     override func draw(_ rect: CGRect) {
@@ -207,9 +268,11 @@ final class BleachOverlayView: UIView {
             drawStroke(points: stroke.points, width: stroke.width, page: page, pdfView: pdfView, context: context)
         }
 
+        let movingClipID = moveDraft?.clip.id
         for paste in model.pastedClips {
+            if let movingClipID = movingClipID, paste.id == movingClipID { continue }
             guard let page = model.page(for: paste.pageID) else { continue }
-            drawPaste(paste, page: page, pdfView: pdfView)
+            drawPaste(paste, page: page, pdfView: pdfView, context: context, alpha: 1)
         }
 
         if let selection = model.lassoSelection, let page = model.page(for: selection.pageID) {
@@ -229,13 +292,92 @@ final class BleachOverlayView: UIView {
         if let lassoDraft {
             drawLasso(points: lassoDraft.points, page: lassoDraft.page, pdfView: pdfView, context: context, isDraft: true)
         }
+
+        if let pasteDraft {
+            drawPaste(pasteDraft.paste, page: pasteDraft.page, pdfView: pdfView, context: context, alpha: 0.55)
+        }
+
+        if let moveDraft {
+            var movingClip = moveDraft.clip
+            movingClip.origin = moveDraft.currentOrigin
+            drawPaste(movingClip, page: moveDraft.page, pdfView: pdfView, context: context, alpha: 0.7)
+        }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
     }
 
     private func configure() {
         isOpaque = false
-        isMultipleTouchEnabled = false
+        isMultipleTouchEnabled = true
         isUserInteractionEnabled = true
         contentMode = .redraw
+
+        let pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        pinchRecognizer.delegate = self
+        addGestureRecognizer(pinchRecognizer)
+        self.pinchRecognizer = pinchRecognizer
+
+        let twoFingerPanRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handleTwoFingerPan(_:)))
+        twoFingerPanRecognizer.minimumNumberOfTouches = 2
+        twoFingerPanRecognizer.maximumNumberOfTouches = 2
+        twoFingerPanRecognizer.delegate = self
+        addGestureRecognizer(twoFingerPanRecognizer)
+        self.twoFingerPanRecognizer = twoFingerPanRecognizer
+    }
+
+    @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+        guard let model else { return }
+
+        switch recognizer.state {
+        case .began:
+            pinchStartZoomScale = model.zoomScale
+            cancelDrafts()
+        case .changed, .ended:
+            model.setZoomScale(pinchStartZoomScale * recognizer.scale)
+        case .cancelled, .failed:
+            cancelDrafts()
+        default:
+            break
+        }
+
+        setNeedsDisplay()
+    }
+
+    @objc private func handleTwoFingerPan(_ recognizer: UIPanGestureRecognizer) {
+        guard let scrollView = pdfScrollView() else { return }
+
+        if recognizer.state == .began {
+            cancelDrafts()
+        }
+
+        let translation = recognizer.translation(in: self)
+        let minX = -scrollView.adjustedContentInset.left
+        let minY = -scrollView.adjustedContentInset.top
+        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right)
+        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
+        var nextOffset = CGPoint(
+            x: scrollView.contentOffset.x - translation.x,
+            y: scrollView.contentOffset.y - translation.y
+        )
+        nextOffset.x = min(max(nextOffset.x, minX), maxX)
+        nextOffset.y = min(max(nextOffset.y, minY), maxY)
+
+        scrollView.setContentOffset(nextOffset, animated: false)
+        recognizer.setTranslation(.zero, in: self)
+        setNeedsDisplay()
+    }
+
+    private func cancelDrafts() {
+        strokeDraft = nil
+        lassoDraft = nil
+        pasteDraft = nil
+        moveDraft = nil
+    }
+
+    private func pdfScrollView() -> UIScrollView? {
+        pdfView?.subviews.compactMap { $0 as? UIScrollView }.first
     }
 
     private func touchInfo(for touch: UITouch) -> TouchInfo? {
@@ -296,6 +438,42 @@ final class BleachOverlayView: UIView {
         setNeedsDisplay()
     }
 
+    private func updatePasteDraft(touch: UITouch) {
+        guard
+            var draft = pasteDraft,
+            let pdfView
+        else {
+            return
+        }
+
+        let pointInPDFView = convert(touch.location(in: self), to: pdfView)
+        let pointOnPage = pdfView.convert(pointInPDFView, to: draft.page)
+        draft.paste.origin = CGPoint(
+            x: pointOnPage.x - draft.paste.size.width / 2,
+            y: pointOnPage.y - draft.paste.size.height / 2
+        )
+        pasteDraft = draft
+        setNeedsDisplay()
+    }
+
+    private func updateMoveDraft(touch: UITouch) {
+        guard
+            var draft = moveDraft,
+            let pdfView
+        else {
+            return
+        }
+
+        let pointInPDFView = convert(touch.location(in: self), to: pdfView)
+        let pointOnPage = pdfView.convert(pointInPDFView, to: draft.page)
+        draft.currentOrigin = CGPoint(
+            x: pointOnPage.x - draft.touchOffset.x,
+            y: pointOnPage.y - draft.touchOffset.y
+        )
+        moveDraft = draft
+        setNeedsDisplay()
+    }
+
     private func finishStroke(cancelled: Bool) {
         defer {
             strokeDraft = nil
@@ -324,6 +502,26 @@ final class BleachOverlayView: UIView {
         } else {
             model.setLassoSelection(nil)
         }
+    }
+
+    private func finishPaste(cancelled: Bool) {
+        defer {
+            pasteDraft = nil
+            setNeedsDisplay()
+        }
+
+        guard !cancelled, let pasteDraft, let model else { return }
+        model.addPastedClip(pasteDraft.paste)
+    }
+
+    private func finishMove(cancelled: Bool) {
+        defer {
+            moveDraft = nil
+            setNeedsDisplay()
+        }
+
+        guard !cancelled, let moveDraft, let model else { return }
+        model.movePastedClip(id: moveDraft.clip.id, to: moveDraft.currentOrigin)
     }
 
     private func drawStroke(
@@ -394,7 +592,13 @@ final class BleachOverlayView: UIView {
         context.restoreGState()
     }
 
-    private func drawPaste(_ paste: PastedClip, page: PDFPage, pdfView: PDFView) {
+    private func drawPaste(
+        _ paste: PastedClip,
+        page: PDFPage,
+        pdfView: PDFView,
+        context: CGContext,
+        alpha: CGFloat
+    ) {
         let bottomLeft = pdfView.convert(paste.origin, from: page)
         let topRight = pdfView.convert(
             CGPoint(x: paste.origin.x + paste.size.width, y: paste.origin.y + paste.size.height),
@@ -410,7 +614,18 @@ final class BleachOverlayView: UIView {
             height: abs(topRightInSelf.y - bottomLeftInSelf.y)
         )
 
+        context.saveGState()
+        context.setAlpha(alpha)
         paste.image.draw(in: rect)
+
+        if alpha < 1 {
+            context.setAlpha(1)
+            context.setStrokeColor(UIColor.systemBlue.cgColor)
+            context.setLineWidth(2)
+            context.stroke(rect)
+        }
+
+        context.restoreGState()
     }
 
     private func convert(points: [CGPoint], page: PDFPage, pdfView: PDFView) -> [CGPoint] {
@@ -441,6 +656,18 @@ private struct LassoDraft {
     var points: [CGPoint]
 }
 
+private struct PasteDraft {
+    let page: PDFPage
+    var paste: PastedClip
+}
+
+private struct MoveDraft {
+    let page: PDFPage
+    let clip: PastedClip
+    var currentOrigin: CGPoint
+    let touchOffset: CGPoint
+}
+
 private extension CGPoint {
     func distance(to other: CGPoint) -> CGFloat {
         let deltaX = x - other.x
@@ -448,4 +675,3 @@ private extension CGPoint {
         return sqrt(deltaX * deltaX + deltaY * deltaY)
     }
 }
-

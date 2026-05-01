@@ -58,7 +58,7 @@ struct PastedClip: Identifiable {
     let id: UUID
     let pageID: UUID
     let image: UIImage
-    let origin: CGPoint
+    var origin: CGPoint
     let size: CGSize
 
     init(id: UUID = UUID(), pageID: UUID, image: UIImage, origin: CGPoint, size: CGSize) {
@@ -87,15 +87,20 @@ enum BleacherError: LocalizedError {
 private enum EditCommand {
     case addStroke(BleachStroke)
     case addPaste(PastedClip)
+    case movePaste(id: UUID, from: CGPoint, to: CGPoint)
     case deletePage(index: Int, page: PDFPage, pageID: UUID, removedStrokes: [BleachStroke], removedPastes: [PastedClip])
 }
 
 @MainActor
 final class DocumentModel: ObservableObject {
+    let minZoomScale: CGFloat = 0.5
+    let maxZoomScale: CGFloat = 4
+
     @Published var pdfDocument: PDFDocument?
     @Published var fileName = "Sin título.pdf"
     @Published var eraserWidth: CGFloat = 36
     @Published var selectedTool: EditingTool = .eraser
+    @Published private(set) var zoomScale: CGFloat = 1
     @Published var selectedPageID: UUID?
     @Published private(set) var strokes: [BleachStroke] = []
     @Published private(set) var lassoSelection: LassoSelection?
@@ -168,6 +173,7 @@ final class DocumentModel: ObservableObject {
         lassoSelection = nil
         copiedClip = nil
         pastedClips = []
+        zoomScale = 1
         pageIDs = [:]
         undoStack = []
         redoStack = []
@@ -266,23 +272,56 @@ final class DocumentModel: ObservableObject {
         selectedTool = .paste
     }
 
-    func pasteCopiedClip(at pagePoint: CGPoint, pageID: UUID) {
-        guard let copiedClip else { return }
+    func setZoomScale(_ scale: CGFloat) {
+        zoomScale = min(max(scale, minZoomScale), maxZoomScale)
+    }
+
+    func resetZoom() {
+        zoomScale = 1
+    }
+
+    func pastePreview(at pagePoint: CGPoint, pageID: UUID) -> PastedClip? {
+        guard let copiedClip else { return nil }
 
         let origin = CGPoint(
             x: pagePoint.x - copiedClip.size.width / 2,
             y: pagePoint.y - copiedClip.size.height / 2
         )
-        let paste = PastedClip(
+
+        return PastedClip(
             pageID: pageID,
             image: copiedClip.image,
             origin: origin,
             size: copiedClip.size
         )
+    }
 
+    func addPastedClip(_ paste: PastedClip) {
         pastedClips.append(paste)
         lassoSelection = nil
         undoStack.append(.addPaste(paste))
+        redoStack.removeAll()
+        refreshHistoryAvailability()
+    }
+
+    func pastedClip(at pagePoint: CGPoint, pageID: UUID) -> PastedClip? {
+        pastedClips.reversed().first { paste in
+            guard paste.pageID == pageID else { return false }
+            return CGRect(origin: paste.origin, size: paste.size).contains(pagePoint)
+        }
+    }
+
+    func movePastedClip(id: UUID, to origin: CGPoint) {
+        guard
+            let index = pastedClips.firstIndex(where: { $0.id == id }),
+            pastedClips[index].origin.distance(to: origin) > 0.5
+        else {
+            return
+        }
+
+        let oldOrigin = pastedClips[index].origin
+        setPastedClipOrigin(id: id, origin: origin)
+        undoStack.append(.movePaste(id: id, from: oldOrigin, to: origin))
         redoStack.removeAll()
         refreshHistoryAvailability()
     }
@@ -312,6 +351,9 @@ final class DocumentModel: ObservableObject {
         strokes.removeAll { $0.pageID == selectedPageID }
         let removedPastes = pastedClips.filter { $0.pageID == selectedPageID }
         pastedClips.removeAll { $0.pageID == selectedPageID }
+        if lassoSelection?.pageID == selectedPageID {
+            lassoSelection = nil
+        }
         document.removePage(at: pageIndex)
 
         undoStack.append(.deletePage(
@@ -337,6 +379,10 @@ final class DocumentModel: ObservableObject {
 
         case .addPaste(let paste):
             pastedClips.removeAll { $0.id == paste.id }
+            redoStack.append(command)
+
+        case .movePaste(let id, let oldOrigin, _):
+            setPastedClipOrigin(id: id, origin: oldOrigin)
             redoStack.append(command)
 
         case .deletePage(let index, let page, let pageID, let removedStrokes, let removedPastes):
@@ -366,6 +412,10 @@ final class DocumentModel: ObservableObject {
 
         case .addPaste(let paste):
             pastedClips.append(paste)
+            undoStack.append(command)
+
+        case .movePaste(let id, _, let newOrigin):
+            setPastedClipOrigin(id: id, origin: newOrigin)
             undoStack.append(command)
 
         case .deletePage(_, let page, let pageID, let fallbackStrokes, let fallbackPastes):
@@ -462,6 +512,14 @@ final class DocumentModel: ObservableObject {
         canRedo = !redoStack.isEmpty
     }
 
+    private func setPastedClipOrigin(id: UUID, origin: CGPoint) {
+        guard let index = pastedClips.firstIndex(where: { $0.id == id }) else { return }
+
+        var movedPaste = pastedClips[index]
+        movedPaste.origin = origin
+        pastedClips[index] = movedPaste
+    }
+
     private func draw(stroke: BleachStroke, in context: CGContext) {
         context.setStrokeColor(UIColor.white.cgColor)
         context.setFillColor(UIColor.white.cgColor)
@@ -539,5 +597,13 @@ final class DocumentModel: ObservableObject {
         context.scaleBy(x: 1, y: -1)
         context.draw(image, in: CGRect(origin: .zero, size: paste.size))
         context.restoreGState()
+    }
+}
+
+private extension CGPoint {
+    func distance(to other: CGPoint) -> CGFloat {
+        let deltaX = x - other.x
+        let deltaY = y - other.y
+        return sqrt(deltaX * deltaX + deltaY * deltaY)
     }
 }

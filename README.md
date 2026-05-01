@@ -18,7 +18,8 @@ Bleacher es una app nativa para iPad pensada para borrar zonas de PDFs con una e
 - Eliminar la página actual.
 - Deshacer y rehacer por trazo completo.
 - Navegar entre páginas con controles explícitos.
-- Delimitar una zona con Lazo, copiarla y pegarla tocando otro punto del PDF.
+- Ajustar zoom con control deslizante o pellizco.
+- Delimitar una zona con Lazo, copiarla, arrastrarla para pegarla y moverla después.
 - Exportar un PDF nuevo con las áreas borradas.
 
 ## Estrategia de archivos

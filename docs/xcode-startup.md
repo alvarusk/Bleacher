@@ -39,7 +39,9 @@ xcodebuild \
 - Comprobar que `Rehacer` lo restaura.
 - Cambiar el grosor y dibujar otro trazo.
 - Pasar de página con `Anterior` y `Siguiente`.
-- Delimitar una zona con `Lazo`, tocar `Copiar selección`, cambiar a `Pegar` y tocar el PDF para colocarla.
+- Probar zoom con el control deslizante y con pellizco de dos dedos.
+- Delimitar una zona con `Lazo`, tocar `Copiar selección`, cambiar a `Pegar`, arrastrar el recorte semitransparente y soltarlo.
+- Tocar un recorte ya pegado en modo `Pegar` y arrastrarlo a otra posición.
 - Borrar una página.
 - Exportar el PDF.
 - Abrir el PDF exportado y comprobar que las zonas aparecen borradas.
