@@ -22,15 +22,33 @@ enum EditingTool: String, CaseIterable, Identifiable {
     }
 }
 
+enum ZoomFitMode: String, CaseIterable, Identifiable {
+    case width
+    case height
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .width:
+            return "Ancho"
+        case .height:
+            return "Alto"
+        }
+    }
+}
+
 struct BleachStroke: Identifiable, Equatable {
     let id: UUID
     let pageID: UUID
+    var layerIndex: Int
     let width: CGFloat
     let points: [CGPoint]
 
-    init(id: UUID = UUID(), pageID: UUID, width: CGFloat, points: [CGPoint]) {
+    init(id: UUID = UUID(), pageID: UUID, layerIndex: Int = 0, width: CGFloat, points: [CGPoint]) {
         self.id = id
         self.pageID = pageID
+        self.layerIndex = layerIndex
         self.width = width
         self.points = points
     }
@@ -57,16 +75,32 @@ struct LassoClip {
 struct PastedClip: Identifiable {
     let id: UUID
     let pageID: UUID
+    var layerIndex: Int
     let image: UIImage
     var origin: CGPoint
     let size: CGSize
 
-    init(id: UUID = UUID(), pageID: UUID, image: UIImage, origin: CGPoint, size: CGSize) {
+    init(id: UUID = UUID(), pageID: UUID, layerIndex: Int = 0, image: UIImage, origin: CGPoint, size: CGSize) {
         self.id = id
         self.pageID = pageID
+        self.layerIndex = layerIndex
         self.image = image
         self.origin = origin
         self.size = size
+    }
+}
+
+enum PageEditLayer {
+    case stroke(BleachStroke)
+    case paste(PastedClip)
+
+    var layerIndex: Int {
+        switch self {
+        case .stroke(let stroke):
+            return stroke.layerIndex
+        case .paste(let paste):
+            return paste.layerIndex
+        }
     }
 }
 
@@ -101,6 +135,7 @@ final class DocumentModel: ObservableObject {
     @Published var eraserWidth: CGFloat = 36
     @Published var selectedTool: EditingTool = .eraser
     @Published private(set) var zoomScale: CGFloat = 1
+    @Published private(set) var zoomFitMode: ZoomFitMode = .width
     @Published var selectedPageID: UUID?
     @Published private(set) var strokes: [BleachStroke] = []
     @Published private(set) var lassoSelection: LassoSelection?
@@ -115,6 +150,7 @@ final class DocumentModel: ObservableObject {
     private var pageIDs: [ObjectIdentifier: UUID] = [:]
     private var undoStack: [EditCommand] = []
     private var redoStack: [EditCommand] = []
+    private var nextLayerIndex = 1
 
     var displayTitle: String {
         pdfDocument == nil ? "Bleacher" : fileName
@@ -174,9 +210,11 @@ final class DocumentModel: ObservableObject {
         copiedClip = nil
         pastedClips = []
         zoomScale = 1
+        zoomFitMode = .width
         pageIDs = [:]
         undoStack = []
         redoStack = []
+        nextLayerIndex = 1
         currentPageIndex = 0
         documentRevision += 1
         navigationRevision += 1
@@ -280,6 +318,11 @@ final class DocumentModel: ObservableObject {
         zoomScale = 1
     }
 
+    func fitZoom(_ mode: ZoomFitMode) {
+        zoomFitMode = mode
+        zoomScale = 1
+    }
+
     func pastePreview(at pagePoint: CGPoint, pageID: UUID) -> PastedClip? {
         guard let copiedClip else { return nil }
 
@@ -297,18 +340,24 @@ final class DocumentModel: ObservableObject {
     }
 
     func addPastedClip(_ paste: PastedClip) {
-        pastedClips.append(paste)
+        var orderedPaste = paste
+        orderedPaste.layerIndex = nextLayerIndex
+        nextLayerIndex += 1
+
+        pastedClips.append(orderedPaste)
         lassoSelection = nil
-        undoStack.append(.addPaste(paste))
+        undoStack.append(.addPaste(orderedPaste))
         redoStack.removeAll()
         refreshHistoryAvailability()
     }
 
     func pastedClip(at pagePoint: CGPoint, pageID: UUID) -> PastedClip? {
-        pastedClips.reversed().first { paste in
-            guard paste.pageID == pageID else { return false }
-            return CGRect(origin: paste.origin, size: paste.size).contains(pagePoint)
-        }
+        pastedClips
+            .filter { $0.pageID == pageID }
+            .sorted { $0.layerIndex > $1.layerIndex }
+            .first { paste in
+                CGRect(origin: paste.origin, size: paste.size).contains(pagePoint)
+            }
     }
 
     func movePastedClip(id: UUID, to origin: CGPoint) {
@@ -326,11 +375,28 @@ final class DocumentModel: ObservableObject {
         refreshHistoryAvailability()
     }
 
+    func layers(for pageID: UUID) -> [PageEditLayer] {
+        let pageStrokes = strokes
+            .filter { $0.pageID == pageID }
+            .map(PageEditLayer.stroke)
+        let pagePastes = pastedClips
+            .filter { $0.pageID == pageID }
+            .map(PageEditLayer.paste)
+
+        return (pageStrokes + pagePastes).sorted { lhs, rhs in
+            lhs.layerIndex < rhs.layerIndex
+        }
+    }
+
     func addStroke(_ stroke: BleachStroke) {
         guard !stroke.points.isEmpty else { return }
 
-        strokes.append(stroke)
-        undoStack.append(.addStroke(stroke))
+        var orderedStroke = stroke
+        orderedStroke.layerIndex = nextLayerIndex
+        nextLayerIndex += 1
+
+        strokes.append(orderedStroke)
+        undoStack.append(.addStroke(orderedStroke))
         redoStack.removeAll()
         refreshHistoryAvailability()
     }
@@ -393,6 +459,8 @@ final class DocumentModel: ObservableObject {
             pageIDs[ObjectIdentifier(page)] = pageID
             strokes.append(contentsOf: removedStrokes)
             pastedClips.append(contentsOf: removedPastes)
+            bumpNextLayerIndex(after: removedStrokes)
+            bumpNextLayerIndex(after: removedPastes)
             selectedPageID = pageID
             currentPageIndex = insertionIndex
             documentRevision += 1
@@ -408,10 +476,12 @@ final class DocumentModel: ObservableObject {
         switch command {
         case .addStroke(let stroke):
             strokes.append(stroke)
+            bumpNextLayerIndex(after: stroke)
             undoStack.append(command)
 
         case .addPaste(let paste):
             pastedClips.append(paste)
+            bumpNextLayerIndex(after: paste)
             undoStack.append(command)
 
         case .movePaste(let id, _, let newOrigin):
@@ -467,25 +537,19 @@ final class DocumentModel: ObservableObject {
             context.restoreGState()
 
             let id = pageID(for: page)
-            let pageStrokes = strokes.filter { $0.pageID == id }
+            let pageLayers = layers(for: id)
 
-            if !pageStrokes.isEmpty {
+            if !pageLayers.isEmpty {
                 context.saveGState()
                 context.translateBy(x: 0, y: bounds.height)
                 context.scaleBy(x: 1, y: -1)
-                for stroke in pageStrokes {
-                    draw(stroke: stroke, in: context)
-                }
-                context.restoreGState()
-            }
-
-            let pagePastes = pastedClips.filter { $0.pageID == id }
-            if !pagePastes.isEmpty {
-                context.saveGState()
-                context.translateBy(x: 0, y: bounds.height)
-                context.scaleBy(x: 1, y: -1)
-                for paste in pagePastes {
-                    draw(paste: paste, in: context)
+                for layer in pageLayers {
+                    switch layer {
+                    case .stroke(let stroke):
+                        draw(stroke: stroke, in: context)
+                    case .paste(let paste):
+                        draw(paste: paste, in: context)
+                    }
                 }
                 context.restoreGState()
             }
@@ -518,6 +582,26 @@ final class DocumentModel: ObservableObject {
         var movedPaste = pastedClips[index]
         movedPaste.origin = origin
         pastedClips[index] = movedPaste
+    }
+
+    private func bumpNextLayerIndex(after stroke: BleachStroke) {
+        nextLayerIndex = max(nextLayerIndex, stroke.layerIndex + 1)
+    }
+
+    private func bumpNextLayerIndex(after paste: PastedClip) {
+        nextLayerIndex = max(nextLayerIndex, paste.layerIndex + 1)
+    }
+
+    private func bumpNextLayerIndex(after strokes: [BleachStroke]) {
+        for stroke in strokes {
+            bumpNextLayerIndex(after: stroke)
+        }
+    }
+
+    private func bumpNextLayerIndex(after pastes: [PastedClip]) {
+        for paste in pastes {
+            bumpNextLayerIndex(after: paste)
+        }
     }
 
     private func draw(stroke: BleachStroke, in context: CGContext) {

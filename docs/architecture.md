@@ -18,6 +18,7 @@ Bleacher no modifica el PDF original al abrirlo. Mantiene una lista de acciones 
 - páginas eliminadas
 - selecciones de área para copiar y pegar con la herramienta Lazo
 - recortes pegados, con posición editable
+- orden cronológico de capas entre borrados y recortes pegados
 
 Cada trazo se agrupa desde que empieza el toque hasta que termina, así `Deshacer` revierte el trazo completo.
 
@@ -29,16 +30,19 @@ La primera versión del Lazo usa el rectángulo envolvente de la selección como
 
 Los recortes ya pegados pueden volver a moverse desde el modo `Pegar`.
 
-Queda pendiente afinar cómo se comportan la selección libre, el orden exacto de capas entre borrados y pegados, y la exportación final en casos complejos.
+Borrados y recortes pegados se renderizan por orden cronológico. Eso permite borrar una zona pegada después con el borrador y mantener el resultado al levantar el dedo y al exportar.
+
+Queda pendiente afinar cómo se comportan la selección libre, el redimensionado de recortes y la exportación final en casos complejos.
 
 ## Zoom
 
-El visor usa un factor de zoom relativo al ajuste de página. `100%` equivale a encajar la página en el visor.
+El visor usa un factor de zoom relativo al ajuste elegido. `100%` equivale a encajar la página según el modo activo.
 
 La UI ofrece:
 
 - control deslizante de zoom
-- botón para volver al ajuste de página
+- ajuste horizontal por ancho
+- ajuste vertical por alto
 - pellizco con dos dedos
 - desplazamiento con dos dedos cuando la página está ampliada
 
@@ -47,8 +51,7 @@ La UI ofrece:
 Al guardar, la app renderiza un nuevo PDF:
 
 - dibuja cada página original
-- aplica los trazos blancos encima
+- aplica borrados y recortes pegados por orden cronológico de capas
 - omite las páginas eliminadas
-- dibuja los recortes pegados con la herramienta Lazo
 
 Esta primera versión funciona como "whiteout" visual. Si más adelante necesitamos redacción real para eliminar contenido sensible del PDF, habrá que añadir una fase específica que elimine o rasterice el contenido subyacente.

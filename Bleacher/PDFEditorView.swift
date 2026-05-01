@@ -21,6 +21,7 @@ final class PDFEditorHostView: UIView {
     private var observedDocumentRevision: Int?
     private var observedNavigationRevision: Int?
     private var observedZoomScale: CGFloat?
+    private var observedZoomFitMode: ZoomFitMode?
     private var pageChangeObserver: NSObjectProtocol?
 
     override init(frame: CGRect) {
@@ -61,6 +62,7 @@ final class PDFEditorHostView: UIView {
             observedDocumentRevision = model.documentRevision
             observedNavigationRevision = nil
             observedZoomScale = nil
+            observedZoomFitMode = nil
         }
 
         if observedNavigationRevision != model.navigationRevision {
@@ -68,7 +70,9 @@ final class PDFEditorHostView: UIView {
             observedNavigationRevision = model.navigationRevision
         }
 
-        if observedZoomScale == nil || abs((observedZoomScale ?? 0) - model.zoomScale) > 0.0001 {
+        if observedZoomScale == nil ||
+            observedZoomFitMode != model.zoomFitMode ||
+            abs((observedZoomScale ?? 0) - model.zoomScale) > 0.0001 {
             applyZoom(model: model, force: true)
         }
 
@@ -126,7 +130,7 @@ final class PDFEditorHostView: UIView {
     private func applyZoom(model: DocumentModel, force: Bool) {
         guard pdfView.document != nil else { return }
 
-        let fitScale = max(pdfView.scaleFactorForSizeToFit, 0.01)
+        let fitScale = max(fitScale(for: model.zoomFitMode), 0.01)
         pdfView.minScaleFactor = fitScale * model.minZoomScale
         pdfView.maxScaleFactor = fitScale * model.maxZoomScale
 
@@ -137,6 +141,28 @@ final class PDFEditorHostView: UIView {
         }
 
         observedZoomScale = model.zoomScale
+        observedZoomFitMode = model.zoomFitMode
+    }
+
+    private func fitScale(for mode: ZoomFitMode) -> CGFloat {
+        guard let page = pdfView.currentPage ?? pdfView.document?.page(at: 0) else {
+            return pdfView.scaleFactorForSizeToFit
+        }
+
+        let pageBounds = page.bounds(for: .cropBox)
+        guard pageBounds.width > 0, pageBounds.height > 0 else {
+            return pdfView.scaleFactorForSizeToFit
+        }
+
+        let availableWidth = max(1, pdfView.bounds.width - 24)
+        let availableHeight = max(1, pdfView.bounds.height - 24)
+
+        switch mode {
+        case .width:
+            return availableWidth / pageBounds.width
+        case .height:
+            return availableHeight / pageBounds.height
+        }
     }
 
     private func syncCurrentPage() {
@@ -263,16 +289,25 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
             return
         }
 
-        for stroke in model.strokes {
-            guard let page = model.page(for: stroke.pageID) else { continue }
-            drawStroke(points: stroke.points, width: stroke.width, page: page, pdfView: pdfView, context: context)
-        }
-
         let movingClipID = moveDraft?.clip.id
-        for paste in model.pastedClips {
-            if let movingClipID = movingClipID, paste.id == movingClipID { continue }
-            guard let page = model.page(for: paste.pageID) else { continue }
-            drawPaste(paste, page: page, pdfView: pdfView, context: context, alpha: 1)
+        let editedPageIDs = Set(model.strokes.map(\.pageID) + model.pastedClips.map(\.pageID))
+
+        for pageID in editedPageIDs {
+            guard let page = model.page(for: pageID) else { continue }
+
+            for layer in model.layers(for: pageID) {
+                switch layer {
+                case .stroke(let stroke):
+                    drawStroke(points: stroke.points, width: stroke.width, page: page, pdfView: pdfView, context: context)
+                case .paste(var paste):
+                    if let movingClipID = movingClipID, paste.id == movingClipID {
+                        paste.origin = moveDraft?.currentOrigin ?? paste.origin
+                        drawPaste(paste, page: page, pdfView: pdfView, context: context, alpha: 0.7)
+                    } else {
+                        drawPaste(paste, page: page, pdfView: pdfView, context: context, alpha: 1)
+                    }
+                }
+            }
         }
 
         if let selection = model.lassoSelection, let page = model.page(for: selection.pageID) {
@@ -297,11 +332,6 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
             drawPaste(pasteDraft.paste, page: pasteDraft.page, pdfView: pdfView, context: context, alpha: 0.55)
         }
 
-        if let moveDraft {
-            var movingClip = moveDraft.clip
-            movingClip.origin = moveDraft.currentOrigin
-            drawPaste(movingClip, page: moveDraft.page, pdfView: pdfView, context: context, alpha: 0.7)
-        }
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {

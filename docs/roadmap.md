@@ -9,9 +9,9 @@
 - Deshacer y rehacer por trazo completo.
 - Eliminar página actual.
 - Navegar entre páginas con botones visibles.
-- Ajustar zoom con control deslizante y pellizco.
+- Ajustar zoom con control deslizante, pellizco y ajuste por ancho o alto.
 - Exportar PDF desde un botón visible.
-- Copiar, pegar y mover zonas con una primera versión de Lazo.
+- Copiar, pegar, mover y borrar zonas pegadas con una primera versión de Lazo.
 
 ## 0.2 - Experiencia de edición
 
@@ -20,7 +20,7 @@
 - Confirmar antes de borrar una página.
 - Mostrar estado de exportación.
 - Afinar comportamiento de scroll y borrado.
-- Afinar la herramienta Lazo: selección libre real, redimensionado de recortes y orden de capas.
+- Afinar la herramienta Lazo: selección libre real y redimensionado de recortes.
 
 ## 0.3 - Seguridad documental
 

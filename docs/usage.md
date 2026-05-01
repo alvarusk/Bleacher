@@ -12,6 +12,11 @@ Usa los botones `Anterior` y `Siguiente` de la barra inferior. Entre ambos boton
 
 Usa el control `Zoom` de la barra inferior para acercar o alejar la página.
 
+El menú `Ajustar` permite volver al ajuste base:
+
+- `Ajustar ancho`: encaja la página horizontalmente.
+- `Ajustar alto`: encaja la página verticalmente.
+
 También puedes pellizcar con dos dedos sobre el PDF. Si estás ampliado, arrastra con dos dedos para desplazar la vista.
 
 ## Borrar zonas
@@ -19,6 +24,8 @@ También puedes pellizcar con dos dedos sobre el PDF. Si estás ampliado, arrast
 Selecciona `Borrador`, ajusta el grosor con el control inferior y dibuja sobre el PDF.
 
 Cada trazo se guarda como una sola acción de deshacer.
+
+Los borrados se aplican por orden cronológico, así que también puedes borrar zonas que hayas pegado con `Lazo`.
 
 ## Copiar y pegar una zona
 

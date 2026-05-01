@@ -163,10 +163,20 @@ struct ContentView: View {
                     .monospacedDigit()
                     .frame(width: 52, alignment: .trailing)
 
-                Button {
-                    model.resetZoom()
+                Menu {
+                    Button {
+                        model.fitZoom(.width)
+                    } label: {
+                        Label("Ajustar ancho", systemImage: "arrow.left.and.right")
+                    }
+
+                    Button {
+                        model.fitZoom(.height)
+                    } label: {
+                        Label("Ajustar alto", systemImage: "arrow.up.and.down")
+                    }
                 } label: {
-                    Label("Ajustar", systemImage: "arrow.up.left.and.down.right")
+                    Label("Ajustar \(model.zoomFitMode.title.lowercased())", systemImage: "arrow.up.left.and.down.right")
                 }
             }
         }
