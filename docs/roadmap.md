@@ -8,20 +8,15 @@
 - Ajustar grosor del borrador.
 - Deshacer y rehacer por trazo completo.
 - Eliminar página actual.
-- Navegar entre páginas con botones visibles y salto por número de página.
-- Ajustar zoom con control deslizante, pellizco y ajuste por ancho o alto.
-- Mover la vista con herramienta `Mano` y barra lateral de scroll.
-- Exportar PDF desde un botón visible.
-- Copiar, pegar, mover y borrar zonas pegadas con una primera versión de Lazo.
+- Exportar PDF resultante.
 
-## 0.2 - Experiencia de edición
+## 0.2 - Experiencia de edicion
 
 - Mejorar selección de página actual.
 - Añadir miniaturas o navegador de páginas.
 - Confirmar antes de borrar una página.
 - Mostrar estado de exportación.
-- Afinar comportamiento de scroll y borrado.
-- Afinar la herramienta Lazo: selección libre real y redimensionado de recortes.
+- Afinar comportamiento de zoom, scroll y borrado.
 
 ## 0.3 - Seguridad documental
 
@@ -33,5 +28,6 @@
 
 - Atajos de teclado.
 - Mejor soporte para Apple Pencil.
-- Icono de la app.
-- Pruebas básicas del modelo de historial.
+- Icono de app.
+- Tests básicos del modelo de historial.
+
