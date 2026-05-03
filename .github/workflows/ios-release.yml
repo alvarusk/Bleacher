@@ -71,6 +71,8 @@ jobs:
 
       - name: Import signing assets
         run: |
+          set -euo pipefail
+
           KEYCHAIN_PATH="$RUNNER_TEMP/bleacher-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           CERT_PATH="$RUNNER_TEMP/apple_distribution.p12"
@@ -80,16 +82,24 @@ jobs:
 
           mkdir -p "$PROFILE_DIR"
 
-          printf '%s' "$APPLE_CERTIFICATES_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$APPLE_CERTIFICATES_P12_BASE64" | base64 -D > "$CERT_PATH"
           printf '%s' "$APPSTORE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_IOS_APPSTORE_PROFILE_BASE64" | base64 --decode > "$PROFILE_SRC"
+          printf '%s' "$APPLE_IOS_APPSTORE_PROFILE_BASE64" | base64 -D > "$PROFILE_SRC"
+
+          openssl pkcs12 -in "$CERT_PATH" -noout -passin "pass:$APPLE_CERTIFICATES_P12_PASSWORD"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
           security default-keychain -s "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATES_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/xcodebuild
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATES_P12_PASSWORD" \
+            -f pkcs12 \
+            -A \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           security cms -D -i "$PROFILE_SRC" > "$PROFILE_PLIST"
