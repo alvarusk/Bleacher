@@ -697,8 +697,11 @@ final class BleachOverlayView: UIView, UIGestureRecognizerDelegate {
         guard !points.isEmpty else { return }
 
         let lineWidth = max(1, width * pdfView.scaleFactor)
-        context.setStrokeColor(UIColor.white.cgColor)
-        context.setFillColor(UIColor.white.cgColor)
+        // Live erasing is shown in a soft gray so it stays visible over the PDF,
+        // while export still renders the same strokes as pure white.
+        let previewColor = UIColor(white: 0.84, alpha: 0.96)
+        context.setStrokeColor(previewColor.cgColor)
+        context.setFillColor(previewColor.cgColor)
         context.setLineCap(.round)
         context.setLineJoin(.round)
         context.setLineWidth(lineWidth)

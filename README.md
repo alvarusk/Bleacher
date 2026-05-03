@@ -32,4 +32,5 @@ Bleacher no se integra directamente con iCloud, Google Drive ni OneDrive. Usa la
 - [Arquitectura inicial](docs/architecture.md)
 - [Uso básico](docs/usage.md)
 - [Arranque en Xcode](docs/xcode-startup.md)
+- [CI y release iOS](docs/apple_ci.md)
 - [Roadmap](docs/roadmap.md)

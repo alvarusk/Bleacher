@@ -1,0 +1,18 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Upload an IPA to TestFlight using an App Store Connect API key JSON file."
+  lane :testflight do |options|
+    ipa_path = options[:ipa_path]
+    api_key_path = options[:api_key_path]
+
+    UI.user_error!("Missing ipa_path") if ipa_path.to_s.empty?
+    UI.user_error!("Missing api_key_path") if api_key_path.to_s.empty?
+
+    pilot(
+      ipa: ipa_path,
+      api_key_path: api_key_path,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

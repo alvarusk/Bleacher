@@ -1,9 +1,6 @@
-name: iOS Build
+name: iOS CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -16,6 +13,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE_APP="$(find /Applications -maxdepth 1 -name 'Xcode*26*.app' | sort | head -n 1)"
+          if [ -z "$XCODE_APP" ]; then
+            echo "Xcode 26 not found"
+            ls /Applications
+            exit 1
+          fi
+          sudo xcode-select -switch "$XCODE_APP/Contents/Developer"
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -33,4 +40,3 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
-
