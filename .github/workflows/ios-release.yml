@@ -19,6 +19,12 @@ jobs:
       SCHEME: Bleacher
       APP_BUNDLE_ID: com.kingdomm.bleacher
       APPLE_DEVELOPMENT_TEAM: R24Q9H7VFW
+      APPLE_CERTIFICATES_P12_BASE64: ${{ secrets.APPLE_CERTIFICATES_P12_BASE64 }}
+      APPLE_CERTIFICATES_P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATES_P12_PASSWORD }}
+      APPLE_IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.APPLE_IOS_APPSTORE_PROFILE_BASE64 }}
+      APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+      APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
       ARCHIVE_PATH: ${{ github.workspace }}/build/Bleacher.xcarchive
       EXPORT_PATH: ${{ github.workspace }}/build/export
       FASTLANE_API_KEY_PATH: ${{ github.workspace }}/build/fastlane/api_key.json
