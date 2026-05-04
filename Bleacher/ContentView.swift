@@ -26,7 +26,7 @@ struct ContentView: View {
                     Button {
                         isImporting = true
                     } label: {
-                        Label("Abrir PDF", systemImage: "doc.badge.plus")
+                        Label("Open PDF", systemImage: "doc.badge.plus")
                     }
                 }
 
@@ -35,28 +35,28 @@ struct ContentView: View {
                         Button {
                             model.undo()
                         } label: {
-                            Label("Deshacer", systemImage: "arrow.uturn.backward")
+                            Label("Undo", systemImage: "arrow.uturn.backward")
                         }
                         .disabled(!model.canUndo)
 
                         Button {
                             model.redo()
                         } label: {
-                            Label("Rehacer", systemImage: "arrow.uturn.forward")
+                            Label("Redo", systemImage: "arrow.uturn.forward")
                         }
                         .disabled(!model.canRedo)
 
                         Button(role: .destructive) {
                             model.deleteSelectedPage()
                         } label: {
-                            Label("Borrar página", systemImage: "trash")
+                            Label("Delete Page", systemImage: "trash")
                         }
                         .disabled(!model.canDeleteSelectedPage)
 
                         Button {
                             exportPDF()
                         } label: {
-                            Label("Guardar PDF", systemImage: "square.and.arrow.down")
+                            Label("Save PDF", systemImage: "square.and.arrow.down")
                         }
                     }
                 }
@@ -113,7 +113,7 @@ struct ContentView: View {
             Button {
                 isImporting = true
             } label: {
-                Label("Abrir PDF", systemImage: "folder")
+                Label("Open PDF", systemImage: "folder")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
@@ -128,12 +128,12 @@ struct ContentView: View {
                 Button {
                     model.goToPreviousPage()
                 } label: {
-                    Label("Anterior", systemImage: "chevron.left")
+                    Label("Previous", systemImage: "chevron.left")
                 }
                 .disabled(!model.canGoToPreviousPage)
 
                 HStack(spacing: 6) {
-                    TextField("Página", text: $pageInput)
+                    TextField("Page", text: $pageInput)
                         .keyboardType(.numberPad)
                         .submitLabel(.go)
                         .textFieldStyle(.roundedBorder)
@@ -147,11 +147,11 @@ struct ContentView: View {
                         pageInputFocused = false
                         commitPageInput()
                     } label: {
-                        Label("Ir a página", systemImage: "arrow.right.to.line")
+                        Label("Go to Page", systemImage: "arrow.right.to.line")
                             .labelStyle(.iconOnly)
                     }
 
-                    Text("de \(model.pageCount)")
+                    Text("of \(model.pageCount)")
                         .font(.callout.weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -162,7 +162,7 @@ struct ContentView: View {
                 Button {
                     model.goToNextPage()
                 } label: {
-                    Label("Siguiente", systemImage: "chevron.right")
+                    Label("Next", systemImage: "chevron.right")
                 }
                 .disabled(!model.canGoToNextPage)
 
@@ -171,13 +171,13 @@ struct ContentView: View {
                 Button {
                     exportPDF()
                 } label: {
-                    Label("Exportar PDF", systemImage: "square.and.arrow.down")
+                    Label("Export PDF", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
             }
 
             HStack(spacing: 14) {
-                Picker("Herramienta", selection: $model.selectedTool) {
+                Picker("Tool", selection: $model.selectedTool) {
                     ForEach(EditingTool.allCases) { tool in
                         Label(tool.title, systemImage: tool.systemImage).tag(tool)
                     }
@@ -204,16 +204,16 @@ struct ContentView: View {
                     Button {
                         model.fitZoom(.width)
                     } label: {
-                        Label("Ajustar ancho", systemImage: "arrow.left.and.right")
+                        Label("Fit Width", systemImage: "arrow.left.and.right")
                     }
 
                     Button {
                         model.fitZoom(.height)
                     } label: {
-                        Label("Ajustar alto", systemImage: "arrow.up.and.down")
+                        Label("Fit Height", systemImage: "arrow.up.and.down")
                     }
                 } label: {
-                    Label("Ajustar \(model.zoomFitMode.title.lowercased())", systemImage: "arrow.up.left.and.down.right")
+                    Label("Fit \(model.zoomFitMode.title.lowercased())", systemImage: "arrow.up.left.and.down.right")
                 }
             }
         }
@@ -233,14 +233,14 @@ struct ContentView: View {
     private var toolSpecificControls: some View {
         switch model.selectedTool {
         case .pan:
-            Label("Arrastra con un dedo para mover la vista", systemImage: "hand.raised")
+            Label("Drag with one finger to move the view", systemImage: "hand.raised")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
 
         case .eraser:
-            Label("Grosor", systemImage: "eraser")
+            Label("Width", systemImage: "eraser")
                 .labelStyle(.iconOnly)
                 .font(.title3)
 
@@ -255,14 +255,14 @@ struct ContentView: View {
             Button {
                 model.copyCurrentSelection()
             } label: {
-                Label("Copiar selección", systemImage: "doc.on.doc")
+                Label("Copy Selection", systemImage: "doc.on.doc")
             }
             .disabled(!model.canCopySelection)
 
             Spacer(minLength: 0)
 
         case .paste:
-            Label("Toca y arrastra para colocar", systemImage: "hand.tap")
+            Label("Tap and drag to place", systemImage: "hand.tap")
                 .font(.callout)
                 .foregroundStyle(model.canPaste ? .primary : .secondary)
 

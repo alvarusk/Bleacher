@@ -14,13 +14,13 @@ enum EditingTool: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .pan:
-            return "Mano"
+            return "Hand"
         case .eraser:
-            return "Borrador"
+            return "Eraser"
         case .lasso:
-            return "Lazo"
+            return "Lasso"
         case .paste:
-            return "Pegar"
+            return "Paste"
         }
     }
 
@@ -47,9 +47,9 @@ enum ZoomFitMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .width:
-            return "Ancho"
+            return "Width"
         case .height:
-            return "Alto"
+            return "Height"
         }
     }
 }
@@ -127,9 +127,9 @@ enum BleacherError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidPDF:
-            return "No se pudo abrir el PDF."
+            return "Could not open the PDF."
         case .missingDocument:
-            return "No hay ningún PDF abierto."
+            return "No PDF is currently open."
         }
     }
 }
@@ -147,7 +147,7 @@ final class DocumentModel: ObservableObject {
     let maxZoomScale: CGFloat = 4
 
     @Published var pdfDocument: PDFDocument?
-    @Published var fileName = "Sin título.pdf"
+    @Published var fileName = "Untitled.pdf"
     @Published var eraserWidth: CGFloat = 36
     @Published var selectedTool: EditingTool = .eraser
     @Published private(set) var zoomScale: CGFloat = 1
@@ -197,8 +197,8 @@ final class DocumentModel: ObservableObject {
     }
 
     var pageStatus: String {
-        guard pageCount > 0 else { return "Sin páginas" }
-        return "Página \(currentPageIndex + 1) de \(pageCount)"
+        guard pageCount > 0 else { return "No pages" }
+        return "Page \(currentPageIndex + 1) of \(pageCount)"
     }
 
     var exportFileName: String {
