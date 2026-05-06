@@ -145,6 +145,7 @@ private enum EditCommand {
 final class DocumentModel: ObservableObject {
     let minZoomScale: CGFloat = 0.5
     let maxZoomScale: CGFloat = 4
+    private let renderScale: CGFloat = 3
 
     @Published var pdfDocument: PDFDocument?
     @Published var fileName = "Untitled.pdf"
@@ -540,7 +541,7 @@ final class DocumentModel: ObservableObject {
 
         return renderer.pdfData { pdfContext in
             for index in 0..<document.pageCount {
-                guard let page = document.page(at: index), let pageRef = page.pageRef else { continue }
+                guard let page = document.page(at: index), let pageImage = renderedPageImage(for: page) else { continue }
 
                 let pageBounds = page.bounds(for: .cropBox).standardized
                 pdfContext.beginPage(withBounds: pageBounds, pageInfo: [
@@ -549,30 +550,24 @@ final class DocumentModel: ObservableObject {
 
                 guard let context = UIGraphicsGetCurrentContext() else { continue }
 
-                let transform = pageRef.getDrawingTransform(
-                    .cropBox,
-                    rect: pageBounds,
-                    rotate: pageRef.rotationAngle,
-                    preserveAspectRatio: false
-                )
-
-                context.saveGState()
-                context.concatenate(transform)
-                context.drawPDFPage(pageRef)
+                context.interpolationQuality = .high
+                pageImage.draw(in: CGRect(origin: .zero, size: pageBounds.size))
 
                 let id = pageID(for: page)
+                let pageTransform = page.transform(for: .cropBox)
                 let pageLayers = layers(for: id)
                 if !pageLayers.isEmpty {
+                    context.saveGState()
                     for layer in pageLayers {
                         switch layer {
                         case .stroke(let stroke):
-                            draw(stroke: stroke, in: context)
+                            draw(stroke: stroke, in: context, transform: pageTransform)
                         case .paste(let paste):
-                            draw(paste: paste, in: context)
+                            draw(paste: paste, in: context, transform: pageTransform)
                         }
                     }
+                    context.restoreGState()
                 }
-                context.restoreGState()
             }
         }
     }
@@ -652,16 +647,9 @@ final class DocumentModel: ObservableObject {
     }
 
     private func renderClip(from selection: LassoSelection, page: PDFPage) -> LassoClip? {
-        guard let pageRef = page.pageRef else { return nil }
-
         let pageBounds = page.bounds(for: .cropBox).standardized
         let pageRect = CGRect(origin: .zero, size: pageBounds.size)
-        let transform = pageRef.getDrawingTransform(
-            .cropBox,
-            rect: pageRect,
-            rotate: pageRef.rotationAngle,
-            preserveAspectRatio: false
-        )
+        let transform = page.transform(for: .cropBox)
 
         let selectionImagePoints = selection.points.map { $0.applying(transform) }
         let selectionBounds = boundingRect(for: selectionImagePoints).intersection(pageRect).standardized
@@ -670,31 +658,23 @@ final class DocumentModel: ObservableObject {
             return nil
         }
 
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-
-        let pageRenderer = UIGraphicsImageRenderer(size: pageBounds.size, format: format)
-        let pageImage = pageRenderer.image { rendererContext in
-            let context = rendererContext.cgContext
-            context.setFillColor(UIColor.white.cgColor)
-            context.fill(CGRect(origin: .zero, size: pageBounds.size))
-
-            context.concatenate(transform)
-            context.drawPDFPage(pageRef)
+        guard let pageImage = renderedPageImage(for: page) else {
+            return nil
         }
 
         let cropRect = selectionBounds.integral.intersection(pageRect)
+        let cropPixelRect = cropRect.applying(CGAffineTransform(scaleX: renderScale, y: renderScale)).integral
         guard
             !cropRect.isNull,
             cropRect.width > 2,
             cropRect.height > 2,
-            let croppedImage = pageImage.cgImage?.cropping(to: cropRect)
+            let croppedImage = pageImage.cgImage?.cropping(to: cropPixelRect)
         else {
             return nil
         }
 
         return LassoClip(
-            image: UIImage(cgImage: croppedImage, scale: 1, orientation: .up),
+            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .up),
             size: cropRect.size
         )
     }
@@ -709,12 +689,83 @@ final class DocumentModel: ObservableObject {
         context.restoreGState()
     }
 
+    private func draw(stroke: BleachStroke, in context: CGContext, transform: CGAffineTransform) {
+        let points = stroke.points.map { $0.applying(transform) }
+        guard !points.isEmpty else { return }
+
+        context.setStrokeColor(UIColor.white.cgColor)
+        context.setFillColor(UIColor.white.cgColor)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setLineWidth(stroke.width)
+
+        if points.count == 1, let point = points.first {
+            let radius = stroke.width / 2
+            context.fillEllipse(in: CGRect(
+                x: point.x - radius,
+                y: point.y - radius,
+                width: stroke.width,
+                height: stroke.width
+            ))
+            return
+        }
+
+        guard let firstPoint = points.first else { return }
+
+        context.beginPath()
+        context.move(to: firstPoint)
+        for point in points.dropFirst() {
+            context.addLine(to: point)
+        }
+        context.strokePath()
+    }
+
+    private func draw(paste: PastedClip, in context: CGContext, transform: CGAffineTransform) {
+        guard let image = paste.image.cgImage else { return }
+
+        let rect = transformedRect(CGRect(origin: paste.origin, size: paste.size), using: transform)
+
+        context.saveGState()
+        context.translateBy(x: rect.origin.x, y: rect.origin.y + rect.height)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(image, in: CGRect(origin: .zero, size: rect.size))
+        context.restoreGState()
+    }
+
     private func boundingRect(for points: [CGPoint]) -> CGRect {
         guard let firstPoint = points.first else { return .null }
 
         return points.dropFirst().reduce(CGRect(origin: firstPoint, size: .zero)) { rect, point in
             rect.union(CGRect(origin: point, size: .zero))
         }.standardized
+    }
+
+    private func transformedRect(_ rect: CGRect, using transform: CGAffineTransform) -> CGRect {
+        let points = [
+            rect.origin,
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.minX, y: rect.maxY),
+            CGPoint(x: rect.maxX, y: rect.maxY)
+        ].map { $0.applying(transform) }
+
+        return boundingRect(for: points)
+    }
+
+    private func renderedPageImage(for page: PDFPage) -> UIImage? {
+        let pageBounds = page.bounds(for: .cropBox).standardized
+        guard pageBounds.width > 0, pageBounds.height > 0 else { return nil }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = renderScale
+        format.opaque = true
+
+        let renderer = UIGraphicsImageRenderer(size: pageBounds.size, format: format)
+        return renderer.image { rendererContext in
+            let context = rendererContext.cgContext
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(CGRect(origin: .zero, size: pageBounds.size))
+            page.draw(with: .cropBox, to: context)
+        }
     }
 }
 
