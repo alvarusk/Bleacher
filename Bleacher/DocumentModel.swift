@@ -541,15 +541,26 @@ final class DocumentModel: ObservableObject {
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) else { continue }
 
-            let bounds = page.bounds(for: .mediaBox)
-            UIGraphicsBeginPDFPageWithInfo(bounds, nil)
+            let bounds = page.bounds(for: .cropBox).standardized
+            let outputBounds = CGRect(origin: .zero, size: bounds.size)
+            UIGraphicsBeginPDFPageWithInfo(outputBounds, nil)
 
-            guard let context = UIGraphicsGetCurrentContext() else { continue }
+            guard
+                let context = UIGraphicsGetCurrentContext(),
+                let pageRef = page.pageRef
+            else { continue }
+
+            let drawRect = CGRect(origin: .zero, size: bounds.size)
+            let transform = pageRef.getDrawingTransform(
+                .cropBox,
+                rect: drawRect,
+                rotate: pageRef.rotationAngle,
+                preserveAspectRatio: false
+            )
 
             context.saveGState()
-            context.translateBy(x: 0, y: bounds.height)
-            context.scaleBy(x: 1, y: -1)
-            page.draw(with: .mediaBox, to: context)
+            context.concatenate(transform)
+            context.drawPDFPage(pageRef)
             context.restoreGState()
 
             let id = pageID(for: page)
@@ -557,8 +568,7 @@ final class DocumentModel: ObservableObject {
 
             if !pageLayers.isEmpty {
                 context.saveGState()
-                context.translateBy(x: 0, y: bounds.height)
-                context.scaleBy(x: 1, y: -1)
+                context.concatenate(transform)
                 for layer in pageLayers {
                     switch layer {
                     case .stroke(let stroke):
@@ -649,7 +659,7 @@ final class DocumentModel: ObservableObject {
     }
 
     private func renderClip(from selection: LassoSelection, page: PDFPage) -> LassoClip? {
-        let pageBounds = page.bounds(for: .mediaBox)
+        let pageBounds = page.bounds(for: .cropBox).standardized
         let selectionBounds = selection.bounds.intersection(pageBounds).standardized
 
         guard selectionBounds.width > 2, selectionBounds.height > 2 else {
@@ -664,9 +674,19 @@ final class DocumentModel: ObservableObject {
             let context = rendererContext.cgContext
             context.setFillColor(UIColor.white.cgColor)
             context.fill(CGRect(origin: .zero, size: pageBounds.size))
-            context.translateBy(x: -pageBounds.minX, y: pageBounds.height + pageBounds.minY)
-            context.scaleBy(x: 1, y: -1)
-            page.draw(with: .mediaBox, to: context)
+
+            guard let pageRef = page.pageRef else { return }
+
+            let drawRect = CGRect(origin: .zero, size: pageBounds.size)
+            let transform = pageRef.getDrawingTransform(
+                .cropBox,
+                rect: drawRect,
+                rotate: pageRef.rotationAngle,
+                preserveAspectRatio: false
+            )
+
+            context.concatenate(transform)
+            context.drawPDFPage(pageRef)
         }
 
         let cropRect = CGRect(

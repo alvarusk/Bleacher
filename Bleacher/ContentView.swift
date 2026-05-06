@@ -52,12 +52,6 @@ struct ContentView: View {
                             Label("Delete Page", systemImage: "trash")
                         }
                         .disabled(!model.canDeleteSelectedPage)
-
-                        Button {
-                            exportPDF()
-                        } label: {
-                            Label("Save PDF", systemImage: "square.and.arrow.down")
-                        }
                     }
                 }
             }

@@ -86,6 +86,7 @@ final class PDFEditorHostView: UIView {
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
+        pdfView.displayBox = .cropBox
         pdfView.backgroundColor = .systemGroupedBackground
         configureScrollIndicators()
 
