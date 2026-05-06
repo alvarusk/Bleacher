@@ -534,54 +534,47 @@ final class DocumentModel: ObservableObject {
             throw BleacherError.missingDocument
         }
 
-        let output = NSMutableData()
-        UIGraphicsBeginPDFContextToData(output, .zero, nil)
-        defer { UIGraphicsEndPDFContext() }
+        let firstPageBounds = document.page(at: 0)?.bounds(for: .cropBox).standardized
+            ?? CGRect(x: 0, y: 0, width: 612, height: 792)
+        let renderer = UIGraphicsPDFRenderer(bounds: firstPageBounds, format: UIGraphicsPDFRendererFormat())
 
-        for index in 0..<document.pageCount {
-            guard let page = document.page(at: index) else { continue }
+        return renderer.pdfData { pdfContext in
+            for index in 0..<document.pageCount {
+                guard let page = document.page(at: index), let pageRef = page.pageRef else { continue }
 
-            let bounds = page.bounds(for: .cropBox).standardized
-            let outputBounds = CGRect(origin: .zero, size: bounds.size)
-            UIGraphicsBeginPDFPageWithInfo(outputBounds, nil)
+                let pageBounds = page.bounds(for: .cropBox).standardized
+                pdfContext.beginPage(withBounds: pageBounds, pageInfo: [
+                    kCGPDFContextMediaBox as String: pageBounds
+                ])
 
-            guard
-                let context = UIGraphicsGetCurrentContext(),
-                let pageRef = page.pageRef
-            else { continue }
+                guard let context = UIGraphicsGetCurrentContext() else { continue }
 
-            let drawRect = CGRect(origin: .zero, size: bounds.size)
-            let transform = pageRef.getDrawingTransform(
-                .cropBox,
-                rect: drawRect,
-                rotate: pageRef.rotationAngle,
-                preserveAspectRatio: false
-            )
+                let transform = pageRef.getDrawingTransform(
+                    .cropBox,
+                    rect: pageBounds,
+                    rotate: 0,
+                    preserveAspectRatio: false
+                )
 
-            context.saveGState()
-            context.concatenate(transform)
-            context.drawPDFPage(pageRef)
-            context.restoreGState()
-
-            let id = pageID(for: page)
-            let pageLayers = layers(for: id)
-
-            if !pageLayers.isEmpty {
                 context.saveGState()
                 context.concatenate(transform)
-                for layer in pageLayers {
-                    switch layer {
-                    case .stroke(let stroke):
-                        draw(stroke: stroke, in: context)
-                    case .paste(let paste):
-                        draw(paste: paste, in: context)
+                context.drawPDFPage(pageRef)
+
+                let id = pageID(for: page)
+                let pageLayers = layers(for: id)
+                if !pageLayers.isEmpty {
+                    for layer in pageLayers {
+                        switch layer {
+                        case .stroke(let stroke):
+                            draw(stroke: stroke, in: context)
+                        case .paste(let paste):
+                            draw(paste: paste, in: context)
+                        }
                     }
                 }
                 context.restoreGState()
             }
         }
-
-        return Data(referencing: output)
     }
 
     private func selectNearestPage(afterRemovingAt removedIndex: Int) {
@@ -659,8 +652,19 @@ final class DocumentModel: ObservableObject {
     }
 
     private func renderClip(from selection: LassoSelection, page: PDFPage) -> LassoClip? {
+        guard let pageRef = page.pageRef else { return nil }
+
         let pageBounds = page.bounds(for: .cropBox).standardized
-        let selectionBounds = selection.bounds.intersection(pageBounds).standardized
+        let pageRect = CGRect(origin: .zero, size: pageBounds.size)
+        let transform = pageRef.getDrawingTransform(
+            .cropBox,
+            rect: pageRect,
+            rotate: 0,
+            preserveAspectRatio: false
+        )
+
+        let selectionImagePoints = selection.points.map { $0.applying(transform) }
+        let selectionBounds = boundingRect(for: selectionImagePoints).intersection(pageRect).standardized
 
         guard selectionBounds.width > 2, selectionBounds.height > 2 else {
             return nil
@@ -675,37 +679,23 @@ final class DocumentModel: ObservableObject {
             context.setFillColor(UIColor.white.cgColor)
             context.fill(CGRect(origin: .zero, size: pageBounds.size))
 
-            guard let pageRef = page.pageRef else { return }
-
-            let drawRect = CGRect(origin: .zero, size: pageBounds.size)
-            let transform = pageRef.getDrawingTransform(
-                .cropBox,
-                rect: drawRect,
-                rotate: pageRef.rotationAngle,
-                preserveAspectRatio: false
-            )
-
             context.concatenate(transform)
             context.drawPDFPage(pageRef)
         }
 
-        let cropRect = CGRect(
-            x: selectionBounds.minX - pageBounds.minX,
-            y: pageBounds.maxY - selectionBounds.maxY,
-            width: selectionBounds.width,
-            height: selectionBounds.height
-        ).integral
-
-        let imageBounds = CGRect(origin: .zero, size: pageBounds.size)
+        let cropRect = selectionBounds.integral.intersection(pageRect)
         guard
-            let croppedImage = pageImage.cgImage?.cropping(to: cropRect.intersection(imageBounds))
+            !cropRect.isNull,
+            cropRect.width > 2,
+            cropRect.height > 2,
+            let croppedImage = pageImage.cgImage?.cropping(to: cropRect)
         else {
             return nil
         }
 
         return LassoClip(
             image: UIImage(cgImage: croppedImage, scale: 1, orientation: .up),
-            size: selectionBounds.size
+            size: cropRect.size
         )
     }
 
@@ -717,6 +707,14 @@ final class DocumentModel: ObservableObject {
         context.scaleBy(x: 1, y: -1)
         context.draw(image, in: CGRect(origin: .zero, size: paste.size))
         context.restoreGState()
+    }
+
+    private func boundingRect(for points: [CGPoint]) -> CGRect {
+        guard let firstPoint = points.first else { return .null }
+
+        return points.dropFirst().reduce(CGRect(origin: firstPoint, size: .zero)) { rect, point in
+            rect.union(CGRect(origin: point, size: .zero))
+        }.standardized
     }
 }
 
