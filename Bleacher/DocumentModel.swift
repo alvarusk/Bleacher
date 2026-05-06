@@ -552,7 +552,7 @@ final class DocumentModel: ObservableObject {
                 let transform = pageRef.getDrawingTransform(
                     .cropBox,
                     rect: pageBounds,
-                    rotate: 0,
+                    rotate: pageRef.rotationAngle,
                     preserveAspectRatio: false
                 )
 
@@ -659,7 +659,7 @@ final class DocumentModel: ObservableObject {
         let transform = pageRef.getDrawingTransform(
             .cropBox,
             rect: pageRect,
-            rotate: 0,
+            rotate: pageRef.rotationAngle,
             preserveAspectRatio: false
         )
 
