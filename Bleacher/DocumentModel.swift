@@ -221,6 +221,8 @@ final class DocumentModel: ObservableObject {
 
         pdfDocument = document
         fileName = url.lastPathComponent
+        currentPageIndex = 0
+        selectedPageID = nil
         selectedTool = .eraser
         strokes = []
         lassoSelection = nil
@@ -232,7 +234,6 @@ final class DocumentModel: ObservableObject {
         undoStack = []
         redoStack = []
         nextLayerIndex = 1
-        currentPageIndex = 0
         documentRevision += 1
         navigationRevision += 1
 
@@ -674,7 +675,7 @@ final class DocumentModel: ObservableObject {
         }
 
         return LassoClip(
-            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .down),
+            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .downMirrored),
             size: cropRect.size
         )
     }
@@ -754,7 +755,7 @@ final class DocumentModel: ObservableObject {
             context.fill(CGRect(origin: .zero, size: pageBounds.size))
             page.draw(with: .cropBox, to: context)
         }
-        .normalizedOrientation(.down)
+        .normalizedOrientation(.downMirrored)
     }
 }
 
