@@ -674,19 +674,13 @@ final class DocumentModel: ObservableObject {
         }
 
         return LassoClip(
-            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .up),
+            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .down),
             size: cropRect.size
         )
     }
 
     private func draw(paste: PastedClip, in context: CGContext) {
-        guard let image = paste.image.cgImage else { return }
-
-        context.saveGState()
-        context.translateBy(x: paste.origin.x, y: paste.origin.y + paste.size.height)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(image, in: CGRect(origin: .zero, size: paste.size))
-        context.restoreGState()
+        paste.image.draw(in: CGRect(origin: paste.origin, size: paste.size))
     }
 
     private func draw(stroke: BleachStroke, in context: CGContext, transform: CGAffineTransform) {
@@ -721,15 +715,9 @@ final class DocumentModel: ObservableObject {
     }
 
     private func draw(paste: PastedClip, in context: CGContext, transform: CGAffineTransform) {
-        guard let image = paste.image.cgImage else { return }
-
         let rect = transformedRect(CGRect(origin: paste.origin, size: paste.size), using: transform)
 
-        context.saveGState()
-        context.translateBy(x: rect.origin.x, y: rect.origin.y + rect.height)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(image, in: CGRect(origin: .zero, size: rect.size))
-        context.restoreGState()
+        paste.image.draw(in: rect)
     }
 
     private func boundingRect(for points: [CGPoint]) -> CGRect {
@@ -766,6 +754,7 @@ final class DocumentModel: ObservableObject {
             context.fill(CGRect(origin: .zero, size: pageBounds.size))
             page.draw(with: .cropBox, to: context)
         }
+        .normalizedOrientation(.down)
     }
 }
 
@@ -774,5 +763,12 @@ private extension CGPoint {
         let deltaX = x - other.x
         let deltaY = y - other.y
         return sqrt(deltaX * deltaX + deltaY * deltaY)
+    }
+}
+
+private extension UIImage {
+    func normalizedOrientation(_ orientation: UIImage.Orientation) -> UIImage {
+        guard let cgImage else { return self }
+        return UIImage(cgImage: cgImage, scale: scale, orientation: orientation)
     }
 }
