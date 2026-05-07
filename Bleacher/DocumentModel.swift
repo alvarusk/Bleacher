@@ -536,9 +536,12 @@ final class DocumentModel: ObservableObject {
             throw BleacherError.missingDocument
         }
 
-        let firstPageBounds = document.page(at: 0)?.bounds(for: .cropBox).standardized
-            .map { CGRect(origin: .zero, size: $0.size) }
-            ?? CGRect(x: 0, y: 0, width: 612, height: 792)
+        let firstPageBounds: CGRect
+        if let bounds = document.page(at: 0)?.bounds(for: .cropBox).standardized {
+            firstPageBounds = CGRect(origin: .zero, size: bounds.size)
+        } else {
+            firstPageBounds = CGRect(x: 0, y: 0, width: 612, height: 792)
+        }
         let renderer = UIGraphicsPDFRenderer(bounds: firstPageBounds, format: UIGraphicsPDFRendererFormat())
 
         return renderer.pdfData { pdfContext in
