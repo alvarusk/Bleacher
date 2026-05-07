@@ -674,7 +674,13 @@ final class DocumentModel: ObservableObject {
         }
 
         let cropRect = selectionBounds.integral.intersection(pageRect)
-        let cropPixelRect = cropRect.applying(CGAffineTransform(scaleX: renderScale, y: renderScale)).integral
+        let imageCropRect = CGRect(
+            x: cropRect.minX,
+            y: pageRect.height - cropRect.maxY,
+            width: cropRect.width,
+            height: cropRect.height
+        )
+        let cropPixelRect = imageCropRect.applying(CGAffineTransform(scaleX: renderScale, y: renderScale)).integral
         guard
             !cropRect.isNull,
             cropRect.width > 2,
