@@ -555,7 +555,7 @@ final class DocumentModel: ObservableObject {
                 pageImage.draw(in: CGRect(origin: .zero, size: pageBounds.size))
 
                 let id = pageID(for: page)
-                let pageTransform = page.transform(for: .cropBox)
+                let pageTransform = drawingTransform(for: page, pageBounds: pageBounds)
                 let pageLayers = layers(for: id)
                 if !pageLayers.isEmpty {
                     context.saveGState()
@@ -650,7 +650,7 @@ final class DocumentModel: ObservableObject {
     private func renderClip(from selection: LassoSelection, page: PDFPage) -> LassoClip? {
         let pageBounds = page.bounds(for: .cropBox).standardized
         let pageRect = CGRect(origin: .zero, size: pageBounds.size)
-        let transform = page.transform(for: .cropBox)
+        let transform = drawingTransform(for: page, pageBounds: pageBounds)
 
         let selectionImagePoints = selection.points.map { $0.applying(transform) }
         let selectionBounds = boundingRect(for: selectionImagePoints).intersection(pageRect).standardized
@@ -738,6 +738,16 @@ final class DocumentModel: ObservableObject {
         ].map { $0.applying(transform) }
 
         return boundingRect(for: points)
+    }
+
+    private func drawingTransform(for page: PDFPage, pageBounds: CGRect) -> CGAffineTransform {
+        let targetRect = CGRect(origin: .zero, size: pageBounds.size)
+
+        if let pageRef = page.pageRef {
+            return pageRef.getDrawingTransform(.cropBox, rect: targetRect, rotate: 0, preserveAspectRatio: false)
+        }
+
+        return page.transform(for: .cropBox)
     }
 
     private func renderedPageImage(for page: PDFPage) -> UIImage? {
