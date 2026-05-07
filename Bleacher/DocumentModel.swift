@@ -537,6 +537,7 @@ final class DocumentModel: ObservableObject {
         }
 
         let firstPageBounds = document.page(at: 0)?.bounds(for: .cropBox).standardized
+            .map { CGRect(origin: .zero, size: $0.size) }
             ?? CGRect(x: 0, y: 0, width: 612, height: 792)
         let renderer = UIGraphicsPDFRenderer(bounds: firstPageBounds, format: UIGraphicsPDFRendererFormat())
 
@@ -545,17 +546,19 @@ final class DocumentModel: ObservableObject {
                 guard let page = document.page(at: index), let pageImage = renderedPageImage(for: page) else { continue }
 
                 let pageBounds = page.bounds(for: .cropBox).standardized
-                pdfContext.beginPage(withBounds: pageBounds, pageInfo: [
-                    kCGPDFContextMediaBox as String: pageBounds
+                let drawingBounds = CGRect(origin: .zero, size: pageBounds.size)
+                pdfContext.beginPage(withBounds: drawingBounds, pageInfo: [
+                    kCGPDFContextMediaBox as String: drawingBounds
                 ])
 
                 guard let context = UIGraphicsGetCurrentContext() else { continue }
 
                 context.interpolationQuality = .high
-                pageImage.draw(in: CGRect(origin: .zero, size: pageBounds.size))
+                pageImage.draw(in: drawingBounds)
 
                 let id = pageID(for: page)
                 let pageTransform = drawingTransform(for: page, pageBounds: pageBounds)
+                    .concatenating(context.userSpaceToDeviceSpaceTransform)
                 let pageLayers = layers(for: id)
                 if !pageLayers.isEmpty {
                     context.saveGState()
@@ -663,19 +666,23 @@ final class DocumentModel: ObservableObject {
             return nil
         }
 
+        guard let flattenedImage = normalizedImage(from: pageImage), let normalizedCGImage = flattenedImage.cgImage else {
+            return nil
+        }
+
         let cropRect = selectionBounds.integral.intersection(pageRect)
         let cropPixelRect = cropRect.applying(CGAffineTransform(scaleX: renderScale, y: renderScale)).integral
         guard
             !cropRect.isNull,
             cropRect.width > 2,
             cropRect.height > 2,
-            let croppedImage = pageImage.cgImage?.cropping(to: cropPixelRect)
+            let croppedImage = normalizedCGImage.cropping(to: cropPixelRect)
         else {
             return nil
         }
 
         return LassoClip(
-            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .downMirrored),
+            image: UIImage(cgImage: croppedImage, scale: renderScale, orientation: .up),
             size: cropRect.size
         )
     }
@@ -766,6 +773,17 @@ final class DocumentModel: ObservableObject {
             page.draw(with: .cropBox, to: context)
         }
         .normalizedOrientation(.downMirrored)
+    }
+
+    private func normalizedImage(from image: UIImage) -> UIImage? {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = image.scale
+        format.opaque = true
+
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
     }
 }
 
