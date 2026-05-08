@@ -120,6 +120,20 @@ enum PageEditLayer {
     }
 }
 
+private struct PageKey: Hashable {
+    private let rawValue: ObjectIdentifier
+
+    init(page: PDFPage) {
+        // Prefer the underlying PDF page identity so the same logical page
+        // matches across different PDFPage wrapper instances.
+        if let pageRef = page.pageRef {
+            rawValue = ObjectIdentifier(pageRef)
+        } else {
+            rawValue = ObjectIdentifier(page)
+        }
+    }
+}
+
 enum BleacherError: LocalizedError {
     case invalidPDF
     case missingDocument
@@ -164,7 +178,7 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var documentRevision = 0
     @Published private(set) var navigationRevision = 0
 
-    private var pageIDs: [ObjectIdentifier: UUID] = [:]
+    private var pageIDs: [PageKey: UUID] = [:]
     private var undoStack: [EditCommand] = []
     private var redoStack: [EditCommand] = []
     private var nextLayerIndex = 1
@@ -248,7 +262,7 @@ final class DocumentModel: ObservableObject {
     }
 
     func pageID(for page: PDFPage) -> UUID {
-        let key = ObjectIdentifier(page)
+        let key = PageKey(page: page)
         if let existingID = pageIDs[key] {
             return existingID
         }
@@ -263,7 +277,7 @@ final class DocumentModel: ObservableObject {
 
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) else { continue }
-            if pageIDs[ObjectIdentifier(page)] == pageID {
+            if pageIDs[PageKey(page: page)] == pageID {
                 return page
             }
         }
@@ -474,7 +488,7 @@ final class DocumentModel: ObservableObject {
 
             let insertionIndex = min(index, document.pageCount)
             document.insert(page, at: insertionIndex)
-            pageIDs[ObjectIdentifier(page)] = pageID
+            pageIDs[PageKey(page: page)] = pageID
             strokes.append(contentsOf: removedStrokes)
             pastedClips.append(contentsOf: removedPastes)
             bumpNextLayerIndex(after: removedStrokes)
