@@ -11,7 +11,7 @@ on:
 jobs:
   release:
     name: Build and Upload to TestFlight
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: read
     env:
@@ -34,22 +34,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select Xcode 26
+      - name: Select Xcode 26.6
         run: |
-          XCODE_APP="$(find /Applications -maxdepth 1 -name 'Xcode*26*.app' | sort | head -n 1)"
-          if [ -z "$XCODE_APP" ]; then
-            echo "Xcode 26 not found"
+          XCODE_APP="/Applications/Xcode_26.6.app"
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "Xcode 26.6 not found"
             ls /Applications
             exit 1
           fi
           sudo xcode-select -switch "$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
-      - name: Install iOS platform
+      - name: Verify iOS SDK
         run: |
-          sudo xcodebuild -runFirstLaunch
-          xcodebuild -downloadPlatform iOS
           xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
 
       - name: Install fastlane
         run: sudo gem install fastlane -NV
