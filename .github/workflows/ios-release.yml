@@ -45,6 +45,12 @@ jobs:
           sudo xcode-select -switch "$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
+      - name: Install iOS platform
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          xcodebuild -downloadPlatform iOS
+          xcodebuild -showsdks
+
       - name: Install fastlane
         run: sudo gem install fastlane -NV
 
