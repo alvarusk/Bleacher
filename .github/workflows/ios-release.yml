@@ -146,6 +146,40 @@ jobs:
             echo "PROFILE_UUID=$PROFILE_UUID"
           } >> "$GITHUB_ENV"
 
+      - name: Validate signing identity and profile
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/bleacher-signing.keychain-db"
+          security find-identity -p codesigning "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" > "$RUNNER_TEMP/bleacher-identities.txt"
+          cat "$RUNNER_TEMP/bleacher-identities.txt"
+          python3 - <<'PY'
+          import hashlib
+          import os
+          import plistlib
+          import re
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          profile = plistlib.loads((temp / "bleacher-profile.plist").read_bytes())
+          identities = (temp / "bleacher-identities.txt").read_text()
+          valid_hashes = set(re.findall(r'\b[0-9A-Fa-f]{40}\b', identities.upper()))
+          team = os.environ["APPLE_DEVELOPMENT_TEAM"]
+          app_id = f'{team}.{os.environ["APP_BUNDLE_ID"]}'
+          print(f'Profile: {profile["Name"]}', flush=True)
+          print(f'Profile team: {profile.get("TeamIdentifier")}', flush=True)
+          print(f'Profile app ID: {profile["Entitlements"].get("application-identifier")}', flush=True)
+          if team not in profile.get("TeamIdentifier", []):
+              raise SystemExit("Provisioning profile belongs to a different team. Update APPLE_IOS_APPSTORE_PROFILE_BASE64.")
+          if profile["Entitlements"].get("application-identifier") != app_id:
+              raise SystemExit("Provisioning profile does not match Bleacher. Update APPLE_IOS_APPSTORE_PROFILE_BASE64.")
+          if not valid_hashes:
+              raise SystemExit("No valid signing identity in imported P12. Check the certificate, private key, expiry and trust in the identity listing above.")
+          profile_hashes = {hashlib.sha1(cert).hexdigest().upper() for cert in profile["DeveloperCertificates"]}
+          if not profile_hashes.intersection(valid_hashes):
+              raise SystemExit("Profile certificate does not match any valid imported identity. Export the matching P12 or regenerate the profile with the imported certificate.")
+          print("Profile certificate matches a valid imported signing identity.")
+          PY
+
       - name: Create export options
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
