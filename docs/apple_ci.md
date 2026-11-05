@@ -54,6 +54,7 @@ The release workflow reads `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` fro
 
 - If the workflow runs from a tag, the tag must match `vMARKETING_VERSION`
 - The build number is taken from `GITHUB_RUN_NUMBER` during CI
+- Every push to `main` creates a new build for TestFlight, including documentation-only changes.
 
 ## Current scope
 
